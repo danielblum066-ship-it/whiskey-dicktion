@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Whiskey Diction — A Book Club</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Crimson+Pro:ital,wght@0,300;0,400;0,500;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --amber:#C8841A;--amber-light:#E8A830;--amber-dark:#8A5A0A;
+  --smoke:#B8A898;--ash:#3A3028;--char:#1A1410;--oak:#2A2018;
+  --cream:#F2E8D8;--cream-dim:#D4C8B0;--ember:#8B3A1A;
+  --text:#E8DCC8;--text-dim:#9A8E7A;--surface:rgba(42,32,24,0.7);
+  --border:rgba(200,132,26,0.2);--border-hi:rgba(200,132,26,0.5);
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Crimson Pro',Georgia,serif;background:var(--char);color:var(--text);min-height:100vh;overflow-x:hidden;}
+
+/* GRAIN OVERLAY */
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.035'/%3E%3C/svg%3E");
+  opacity:.7;}
+
+/* NAV */
+nav{position:sticky;top:0;z-index:200;background:rgba(16,10,6,0.94);backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;
+  justify-content:space-between;height:58px;}
+.nav-brand{font-family:'Playfair Display',serif;font-size:19px;font-weight:600;
+  color:var(--amber-light);letter-spacing:.05em;display:flex;align-items:center;gap:10px;cursor:pointer;}
+.nav-brand small{color:var(--smoke);font-style:italic;font-weight:400;font-size:13px;letter-spacing:.02em;}
+.nav-links{display:flex;gap:2px;}
+.nav-btn{background:none;border:none;color:var(--text-dim);font-family:'Crimson Pro',serif;
+  font-size:15px;padding:7px 15px;cursor:pointer;border-radius:4px;letter-spacing:.03em;
+  transition:color .2s,background .2s;}
+.nav-btn:hover,.nav-btn.active{color:var(--amber-light);background:rgba(200,132,26,.1);}
+
+/* PAGES */
+.page{display:none;position:relative;z-index:1;}
+.page.active{display:block;animation:fadeUp .35s ease;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+
+/* HERO */
+.hero{padding:70px 2rem 50px;text-align:center;
+  background:linear-gradient(170deg,#180E06 0%,#0E0A06 55%,#1C1008 100%);
+  border-bottom:1px solid var(--border);}
+.hero-glyph{font-size:44px;margin-bottom:14px;display:block;filter:sepia(1) brightness(.65);}
+.hero h1{font-family:'Playfair Display',serif;font-size:clamp(38px,7vw,72px);
+  font-weight:600;color:var(--amber-light);letter-spacing:.06em;line-height:1.1;}
+.hero h1 em{font-style:italic;color:var(--cream);}
+.hero-sub{font-size:17px;color:var(--smoke);margin:14px auto 0;max-width:500px;
+  font-style:italic;font-weight:300;line-height:1.75;}
+.hr-amber{margin:22px auto;width:72px;height:1px;
+  background:linear-gradient(90deg,transparent,var(--amber),transparent);}
+.pill-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+
+/* LAYOUT */
+.wrap{max-width:920px;margin:0 auto;padding:36px 2rem;}
+.pg-head{max-width:920px;margin:0 auto;padding:36px 2rem 0;}
+.pg-head h2{font-family:'Playfair Display',serif;font-size:26px;color:var(--amber-light);margin-bottom:4px;}
+.pg-head p{font-size:15px;color:var(--text-dim);font-style:italic;}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:26px;margin-bottom:22px;}
+.card-title{font-family:'Playfair Display',serif;font-size:19px;font-weight:600;
+  color:var(--amber-light);margin-bottom:16px;display:flex;align-items:center;gap:10px;}
+.card-title::after{content:'';flex:1;height:1px;background:var(--border);}
+
+/* GRID HELPERS */
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+@media(max-width:620px){.g2{grid-template-columns:1fr;}}
+
+/* BADGES */
+.badge{display:inline-block;font-size:11px;font-family:'Crimson Pro',serif;
+  padding:2px 10px;border-radius:20px;letter-spacing:.07em;text-transform:uppercase;font-weight:500;}
+.b-amber{background:rgba(200,132,26,.18);color:var(--amber-light);border:1px solid rgba(200,132,26,.3);}
+.b-smoke{background:rgba(184,168,152,.14);color:var(--smoke);border:1px solid rgba(184,168,152,.2);}
+.b-ember{background:rgba(139,58,26,.2);color:#E08050;border:1px solid rgba(139,58,26,.3);}
+.b-win{background:rgba(200,132,26,.28);color:#FFCC60;border:1px solid rgba(200,132,26,.5);}
+
+/* BUTTONS */
+.btn{font-family:'Crimson Pro',serif;font-size:15px;padding:9px 22px;border-radius:4px;
+  cursor:pointer;letter-spacing:.04em;transition:all .2s;border:none;display:inline-flex;align-items:center;gap:7px;}
+.btn-primary{background:linear-gradient(135deg,var(--amber-dark),var(--amber));color:var(--char);font-weight:500;}
+.btn-primary:hover{background:linear-gradient(135deg,var(--amber),var(--amber-light));transform:translateY(-1px);}
+.btn-outline{background:transparent;color:var(--amber-light);border:1px solid var(--border-hi);}
+.btn-outline:hover{background:rgba(200,132,26,.1);}
+.btn-sm{padding:6px 14px;font-size:13px;}
+.btn-danger{background:rgba(139,58,26,.3);color:#E08050;border:1px solid rgba(139,58,26,.4);}
+.btn-danger:hover{background:rgba(139,58,26,.5);}
+
+/* FORM ELEMENTS */
+.fld{margin-bottom:14px;}
+.fld label{font-size:12px;color:var(--text-dim);letter-spacing:.07em;text-transform:uppercase;display:block;margin-bottom:5px;}
+.fld input,.fld select,.fld textarea{background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.22);
+  color:var(--text);font-family:'Crimson Pro',serif;font-size:15px;padding:9px 13px;
+  border-radius:4px;width:100%;outline:none;transition:border-color .2s;}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--amber);}
+.fld select option{background:#2A2018;color:var(--text);}
+.fld textarea{resize:vertical;}
+
+/* NOTIFICATION */
+.notif{display:none;background:rgba(200,132,26,.13);border:1px solid rgba(200,132,26,.32);
+  border-radius:5px;padding:10px 14px;margin-top:10px;font-size:14px;color:var(--amber-light);}
+.notif.show{display:block;animation:fadeUp .3s ease;}
+.notif.err{background:rgba(139,58,26,.2);border-color:rgba(139,58,26,.4);color:#E08050;}
+
+/* BOOK DISPLAY */
+.book-grid{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:start;}
+.book-spine{width:76px;height:108px;background:linear-gradient(135deg,#5A3A1A,#2A1A08);
+  border:1px solid rgba(200,132,26,.4);border-radius:3px;display:flex;align-items:center;
+  justify-content:center;font-size:26px;flex-shrink:0;
+  box-shadow:-3px 4px 14px rgba(0,0,0,.55),inset 2px 0 4px rgba(200,132,26,.08);}
+.book-title{font-family:'Playfair Display',serif;font-size:18px;color:var(--cream);margin-bottom:3px;}
+.book-author{color:var(--text-dim);font-style:italic;font-size:14px;margin-bottom:9px;}
+
+/* MEETING STATS */
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
+.stat-box{text-align:center;padding:14px 8px;background:rgba(16,10,6,.5);border-radius:6px;border:1px solid rgba(200,132,26,.1);}
+.stat-val{font-family:'Playfair Display',serif;font-size:22px;color:var(--amber-light);}
+.stat-lbl{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-top:3px;}
+
+/* SCHEDULER */
+.date-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:18px;}
+.date-cell{background:rgba(16,10,6,.5);border:1px solid rgba(200,132,26,.14);border-radius:6px;
+  padding:11px 6px;text-align:center;cursor:pointer;transition:all .2s;user-select:none;}
+.date-cell:hover{border-color:var(--border-hi);background:rgba(200,132,26,.07);}
+.date-cell.sel{border-color:var(--amber);background:rgba(200,132,26,.18);}
+.dc-day{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.07em;}
+.dc-num{font-family:'Playfair Display',serif;font-size:21px;color:var(--cream);line-height:1.2;}
+.dc-votes{font-size:11px;color:var(--amber);margin-top:3px;}
+.dc-bar{height:3px;background:rgba(200,132,26,.14);border-radius:2px;margin-top:5px;overflow:hidden;}
+.dc-fill{height:100%;background:var(--amber);border-radius:2px;transition:width .4s;}
+.date-cell.sel .dc-num{color:var(--amber-light);}
+@media(max-width:520px){.date-grid{grid-template-columns:repeat(3,1fr);}}
+
+/* NOTES */
+.note-item{border-left:2px solid rgba(200,132,26,.35);padding:14px 18px;margin-bottom:16px;
+  background:rgba(16,10,6,.28);border-radius:0 6px 6px 0;}
+.note-meta{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;}
+.note-book-name{font-family:'Playfair Display',serif;font-size:15px;color:var(--amber-light);}
+.note-body{font-size:15px;color:var(--text);line-height:1.8;font-style:italic;}
+.note-body strong{color:var(--cream);font-style:normal;}
+
+/* HISTORY TABLE */
+.hist-table{width:100%;border-collapse:collapse;font-size:15px;}
+.hist-table th{text-align:left;font-size:11px;color:var(--text-dim);text-transform:uppercase;
+  letter-spacing:.08em;padding:8px 12px;border-bottom:1px solid var(--border);font-weight:500;}
+.hist-table td{padding:10px 12px;border-bottom:1px solid rgba(200,132,26,.07);color:var(--text);vertical-align:top;}
+.hist-table tr:last-child td{border-bottom:none;}
+.hist-table td:first-child{font-family:'Playfair Display',serif;color:var(--cream);font-size:16px;}
+.hist-table td:nth-child(2){color:var(--text-dim);font-style:italic;}
+
+/* ==================== BRACKET ==================== */
+.bracket-controls{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:22px;}
+.bracket-controls .fld{margin-bottom:0;min-width:140px;}
+
+.bracket-wrap{overflow-x:auto;padding-bottom:12px;}
+.bracket-rounds{display:flex;gap:0;align-items:stretch;min-width:max-content;}
+.bracket-round{display:flex;flex-direction:column;min-width:200px;}
+.round-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.1em;
+  padding:6px 14px;text-align:center;border-bottom:1px solid var(--border);margin-bottom:0;
+  background:rgba(16,10,6,.4);}
+.round-slots{display:flex;flex-direction:column;flex:1;justify-content:space-around;padding:12px 8px;}
+
+.matchup{background:rgba(16,10,6,.5);border:1px solid rgba(200,132,26,.18);border-radius:6px;
+  margin:6px 0;overflow:hidden;position:relative;}
+.matchup.active-round{border-color:rgba(200,132,26,.45);}
+.matchup-book{padding:10px 12px;cursor:pointer;transition:all .2s;display:flex;align-items:center;
+  justify-content:space-between;gap:8px;border-bottom:1px solid rgba(200,132,26,.1);}
+.matchup-book:last-child{border-bottom:none;}
+.matchup-book:hover{background:rgba(200,132,26,.1);}
+.matchup-book.voted-for{background:rgba(200,132,26,.18);}
+.matchup-book.winner{background:rgba(200,132,26,.22);cursor:default;}
+.matchup-book.loser{opacity:.45;cursor:default;}
+.mb-title{font-family:'Playfair Display',serif;font-size:14px;color:var(--cream);line-height:1.3;flex:1;}
+.mb-author{font-size:12px;color:var(--text-dim);font-style:italic;}
+.mb-votes{font-size:13px;color:var(--amber);font-weight:500;min-width:28px;text-align:right;}
+.mb-crown{font-size:14px;margin-left:4px;}
+.matchup-vs{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  font-size:10px;color:var(--text-dim);background:var(--char);
+  padding:1px 5px;border-radius:3px;border:1px solid var(--border);letter-spacing:.06em;pointer-events:none;}
+.matchup-bye{padding:10px 12px;font-size:13px;color:var(--text-dim);font-style:italic;text-align:center;}
+.matchup-timer{font-size:11px;color:var(--smoke);padding:4px 10px;text-align:right;
+  background:rgba(16,10,6,.3);border-top:1px solid rgba(200,132,26,.1);}
+.matchup-timer.urgent{color:#E08050;}
+.connector{width:24px;display:flex;flex-direction:column;justify-content:space-around;
+  padding:12px 0;}
+.conn-line{flex:1;border-right:1px solid rgba(200,132,26,.25);}
+
+.bracket-champ{text-align:center;padding:28px;background:rgba(16,10,6,.5);
+  border:1px solid rgba(200,132,26,.35);border-radius:8px;margin-top:8px;}
+.champ-label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px;}
+.champ-title{font-family:'Playfair Display',serif;font-size:24px;color:var(--amber-light);}
+.champ-author{font-size:14px;color:var(--smoke);font-style:italic;margin-top:4px;}
+
+/* ADMIN PANEL */
+.admin-toggle{font-size:13px;color:var(--text-dim);cursor:pointer;display:inline-flex;
+  align-items:center;gap:6px;padding:6px 0;user-select:none;}
+.admin-toggle:hover{color:var(--smoke);}
+.admin-panel{background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.25);border-radius:6px;
+  padding:20px;margin-top:12px;display:none;}
+.admin-panel.open{display:block;animation:fadeUp .25s ease;}
+.books-input-list{margin-bottom:12px;}
+.book-input-row{display:flex;gap:8px;margin-bottom:8px;align-items:center;}
+.book-input-row input{flex:1;background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.22);
+  color:var(--text);font-family:'Crimson Pro',serif;font-size:14px;padding:7px 11px;
+  border-radius:4px;outline:none;transition:border-color .2s;}
+.book-input-row input:focus{border-color:var(--amber);}
+.remove-book{background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:16px;
+  padding:4px 8px;border-radius:3px;transition:color .2s;}
+.remove-book:hover{color:#E08050;}
+.seed-badge{background:rgba(200,132,26,.15);color:var(--amber);font-size:11px;
+  padding:2px 7px;border-radius:3px;min-width:24px;text-align:center;flex-shrink:0;}
+
+.smoke-line{width:100%;height:1px;background:linear-gradient(90deg,transparent,rgba(200,132,26,.2),transparent);margin:6px 0 22px;}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand" onclick="showPage('home')">🥃 Whiskey Diction <small>— a book club</small></div>
+  <div class="nav-links">
+    <button class="nav-btn active" id="nb-home" onclick="showPage('home')">Home</button>
+    <button class="nav-btn" id="nb-schedule" onclick="showPage('schedule')">Schedule</button>
+    <button class="nav-btn" id="nb-bracket" onclick="showPage('bracket')">Bracket</button>
+    <button class="nav-btn" id="nb-notes" onclick="showPage('notes')">Notes</button>
+  </div>
+</nav>
+
+<!-- ======== HOME ======== -->
+<div id="page-home" class="page active">
+  <div class="hero">
+    <span class="hero-glyph">🥃</span>
+    <h1>Whiskey <em>Diction</em></h1>
+    <div class="hero-sub">Where fine spirits meet finer prose. A book club for those who believe the best discussions happen with a glass in hand.</div>
+    <div class="hr-amber"></div>
+    <div class="pill-row">
+      <span class="badge b-amber">Philadelphia, PA</span>
+      <span class="badge b-smoke">Est. January 2024</span>
+      <span class="badge b-ember">Every 2–3 Months</span>
+    </div>
+  </div>
+  <div class="wrap">
+    <div class="g2">
+      <div class="card">
+        <div class="card-title">Currently Reading</div>
+        <div class="book-grid">
+          <div class="book-spine">📖</div>
+          <div>
+            <div class="book-title">Six of Crows</div>
+            <div class="book-author">Leigh Bardugo</div>
+            <div style="margin-bottom:10px;"><span class="badge b-amber">In Progress</span></div>
+            <div style="font-size:14px;color:var(--text-dim);line-height:1.65;">A heist novel set in a richly imagined world — six dangerous outcasts, one impossible job.</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">Next Meeting</div>
+        <div class="stat-row">
+          <div class="stat-box"><div class="stat-val" id="next-month">TBD</div><div class="stat-lbl">Month</div></div>
+          <div class="stat-box"><div class="stat-val" id="next-date">—</div><div class="stat-lbl">Date</div></div>
+          <div class="stat-box"><div class="stat-val">7pm</div><div class="stat-lbl">Time</div></div>
+        </div>
+        <div style="font-size:14px;color:var(--text-dim);margin-bottom:14px;">📍 Location rotates — check with the group</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="showPage('schedule')">RSVP</button>
+          <button class="btn btn-outline" onclick="showPage('bracket')">Vote on next book</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">About the Club</div>
+      <p style="font-size:16px;line-height:1.85;color:var(--text);">Whiskey Diction is a gathering of readers who appreciate both the slow burn of a good novel and the slow pour of a good dram. We meet every few months in rotating venues across Philadelphia, choose challenging and varied books, and settle in for the kind of long, wandering conversation that only happens when no one's in a hurry. Bring your copy, bring your opinions, and bring something worth sharing.</p>
+      <div class="smoke-line"></div>
+      <div style="display:flex;gap:22px;flex-wrap:wrap;">
+        <div style="font-size:14px;color:var(--text-dim);">🏛️ <span style="color:var(--cream);">6–12 members</span></div>
+        <div style="font-size:14px;color:var(--text-dim);">📚 <span style="color:var(--cream);" id="books-read-count">9 books read</span></div>
+        <div style="font-size:14px;color:var(--text-dim);">🥃 <span style="color:var(--cream);">Whiskey encouraged</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Books We've Read</div>
+      <table class="hist-table">
+        <thead><tr><th>Title</th><th>Author</th><th>Year</th></tr></thead>
+        <tbody id="history-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ======== SCHEDULE ======== -->
+<div id="page-schedule" class="page">
+  <div class="pg-head">
+    <h2>Schedule a Meeting</h2>
+    <p>Vote for the dates that work for you — like Doodle, but with more character.</p>
+  </div>
+  <div class="wrap">
+    <div class="card">
+      <div class="card-title">Cast Your Availability</div>
+      <p style="font-size:15px;color:var(--text-dim);font-style:italic;margin-bottom:20px;">Select all dates you can make it. Results update live so the best date rises to the top.</p>
+      <div class="date-grid" id="sched-grid"></div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px;">
+        <input type="text" id="rsvp-name" placeholder="Your name…" style="background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.22);color:var(--text);font-family:'Crimson Pro',serif;font-size:15px;padding:9px 13px;border-radius:4px;width:180px;outline:none;transition:border-color .2s;">
+        <button class="btn btn-primary" onclick="submitRsvp()">Confirm Availability</button>
+      </div>
+      <div id="rsvp-notif" class="notif"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Confirmed Attendees</div>
+      <div id="attendees" style="display:flex;gap:8px;flex-wrap:wrap;">
+        <span class="badge b-smoke">Marcus T.</span>
+        <span class="badge b-smoke">Elena R.</span>
+        <span class="badge b-smoke">James W.</span>
+        <span class="badge b-smoke">Claire B.</span>
+        <span class="badge b-amber">+ You?</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Add Dates to the Calendar</div>
+      <div class="g2">
+        <div class="fld"><label>Month Label</label><input type="text" id="new-month" placeholder="e.g. June 2025"></div>
+        <div class="fld"><label>Dates (comma-separated)</label><input type="text" id="new-dates" placeholder="e.g. Mon 2, Wed 4, Fri 6"></div>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="addScheduleDates()">Update Calendar</button>
+      <div id="sched-notif" class="notif"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======== BRACKET ======== -->
+<div id="page-bracket" class="page">
+  <div class="pg-head">
+    <h2>Book Bracket</h2>
+    <p>March Madness for readers. Vote on each matchup — the best book advances.</p>
+  </div>
+  <div class="wrap">
+
+    <!-- ADMIN PANEL -->
+    <div class="card" id="admin-card">
+      <div class="card-title">Admin Controls</div>
+      <div class="admin-toggle" onclick="toggleAdmin()" id="admin-toggle-btn">▶ Configure &amp; launch a new bracket</div>
+      <div class="admin-panel" id="admin-panel">
+        <div class="g2">
+          <div class="fld">
+            <label>Bracket size</label>
+            <select id="bracket-size-sel">
+              <option value="4">4 books — 2 rounds</option>
+              <option value="8" selected>8 books — 3 rounds</option>
+              <option value="16">16 books — 4 rounds</option>
+            </select>
+          </div>
+          <div class="fld">
+            <label>Time per round</label>
+            <select id="round-duration-sel">
+              <option value="86400">24 hours</option>
+              <option value="172800" selected>48 hours</option>
+              <option value="259200">72 hours</option>
+              <option value="604800">1 week</option>
+            </select>
+          </div>
+        </div>
+        <div class="fld">
+          <label>Books in bracket <span id="books-needed-label" style="color:var(--amber);font-size:11px;">(8 needed)</span></label>
+          <div class="books-input-list" id="books-input-list"></div>
+          <button class="btn btn-outline btn-sm" onclick="addBookInput()">+ Add book</button>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="launchBracket()">Launch Bracket</button>
+          <button class="btn btn-danger btn-sm" onclick="resetBracket()">Reset</button>
+        </div>
+        <div id="bracket-notif" class="notif"></div>
+      </div>
+    </div>
+
+    <!-- BRACKET DISPLAY -->
+    <div id="bracket-display"></div>
+    <div id="champion-display"></div>
+
+  </div>
+</div>
+
+<!-- ======== NOTES ======== -->
+<div id="page-notes" class="page">
+  <div class="pg-head">
+    <h2>Meeting Notes</h2>
+    <p>A record of what was said — and what was drunk.</p>
+  </div>
+  <div class="wrap">
+    <div class="card">
+      <div class="card-title">Archive</div>
+      <div id="notes-list"></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Add Notes</div>
+      <div class="g2">
+        <div class="fld"><label>Book discussed</label><input type="text" id="note-book" placeholder="e.g. Six of Crows"></div>
+        <div class="fld"><label>Meeting date</label><input type="text" id="note-date" placeholder="e.g. May 17, 2025"></div>
+      </div>
+      <div class="fld"><label>Whiskey of the evening</label><input type="text" id="note-whiskey" placeholder="e.g. Blanton's Single Barrel"></div>
+      <div class="fld"><label>Notes</label>
+        <textarea id="note-text" rows="5" placeholder="Key themes, memorable quotes, best arguments, the whiskey of the evening…"></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="addNote()">Save Notes</button>
+      <div id="note-notif" class="notif"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ───────────────────────────────────────────────────────────────────
+const HISTORY = [
+  {title:'Contact',author:'Carl Sagan',year:'2024'},
+  {title:'Red Rising',author:'Pierce Brown',year:'2024'},
+  {title:'The Tender Bar',author:'J.R. Moehringer',year:'2024'},
+  {title:'The Splendid and the Vile',author:'Erik Larson',year:'2024'},
+  {title:'King Solomon\'s Mines',author:'H. Rider Haggard',year:'2024'},
+  {title:'The Wager',author:'David Grann',year:'2025'},
+  {title:'The Master and Margarita',author:'Mikhail Bulgakov',year:'2025'},
+  {title:'The Three Musketeers',author:'Alexandre Dumas',year:'2025'},
+  {title:'Six of Crows',author:'Leigh Bardugo',year:'2025 (current)'},
+];
+
+const SCHED_DATES = [
+  {day:'Mon',num:5},{day:'Wed',num:7},{day:'Sat',num:10},
+  {day:'Sun',num:11},{day:'Mon',num:12},{day:'Wed',num:14},
+  {day:'Thu',num:15},{day:'Fri',num:16},{day:'Sat',num:17},{day:'Sun',num:18}
+];
+let schedVotes = [2,1,4,3,2,3,5,4,7,3];
+let schedMonth = 'May 2025';
+let selectedDates = new Set();
+
+let notes = [
+  {book:'The Three Musketeers',date:'February 2025',whiskey:'Michter\'s US*1',
+    body:'<strong>Consensus:</strong> Far more fun than anyone expected from a 19th-century French adventure. Athos emerged as the unexpected favourite — a broken aristocrat hiding in plain sight. The swashbuckling set pieces held up surprisingly well. <strong>Best argument:</strong> Is d\'Artagnan a hero or just extraordinarily lucky?'},
+  {book:'The Master and Margarita',date:'October 2024',whiskey:'Ardbeg 10',
+    body:'<strong>Consensus:</strong> Bewildering, brilliant, and unlike anything else. The Satan-visits-Soviet-Moscow conceit landed better with some members than others. Chapters were read aloud. <strong>Most heated exchange:</strong> Is Woland the villain or the most honest character in the book?'},
+  {book:'The Wager',date:'July 2024',whiskey:'Eagle Rare',
+    body:'<strong>Consensus:</strong> Grann at his best — survival, mutiny, and the slipperiness of truth. The real-life courtroom drama at the end shocked everyone who hadn\'t looked it up beforehand. <strong>Quote of the night:</strong> "Every man has his breaking point. This book finds several."'},
+];
+
+// ─── NAVIGATION ─────────────────────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  document.getElementById('nb-'+id).classList.add('active');
+  window.scrollTo(0,0);
+}
+
+// ─── HOME ────────────────────────────────────────────────────────────────────
+function renderHistory(){
+  const tbody=document.getElementById('history-tbody');
+  tbody.innerHTML=HISTORY.map(b=>`<tr><td>${b.title}</td><td>${b.author}</td><td>${b.year}</td></tr>`).join('');
+  document.getElementById('books-read-count').textContent=HISTORY.length+' books read';
+}
+
+// Next meeting: find top voted date
+function updateNextMeeting(){
+  const max=Math.max(...schedVotes);
+  const idx=schedVotes.indexOf(max);
+  const d=SCHED_DATES[idx];
+  const parts=schedMonth.split(' ');
+  document.getElementById('next-month').textContent=parts[0]||'TBD';
+  document.getElementById('next-date').textContent=d?d.num:'—';
+}
+
+// ─── SCHEDULER ───────────────────────────────────────────────────────────────
+function renderScheduler(){
+  const max=Math.max(...schedVotes);
+  const grid=document.getElementById('sched-grid');
+  grid.innerHTML=SCHED_DATES.map((d,i)=>`
+    <div class="date-cell${selectedDates.has(i)?' sel':''}" onclick="toggleDate(${i})">
+      <div class="dc-day">${d.day}</div>
+      <div class="dc-num">${d.num}</div>
+      <div class="dc-votes">${schedVotes[i]} vote${schedVotes[i]!==1?'s':''}</div>
+      <div class="dc-bar"><div class="dc-fill" style="width:${Math.round(schedVotes[i]/max*100)}%"></div></div>
+    </div>`).join('');
+}
+function toggleDate(i){selectedDates.has(i)?selectedDates.delete(i):selectedDates.add(i);renderScheduler();}
+function submitRsvp(){
+  const name=document.getElementById('rsvp-name').value.trim();
+  const n=document.getElementById('rsvp-notif');
+  n.classList.remove('err');
+  if(!name){n.textContent='Please enter your name.';n.classList.add('show','err');return;}
+  if(!selectedDates.size){n.textContent='Please select at least one date.';n.classList.add('show','err');return;}
+  selectedDates.forEach(i=>schedVotes[i]++);
+  const badge=document.createElement('span');
+  badge.className='badge b-amber';badge.textContent=name;
+  document.getElementById('attendees').appendChild(badge);
+  n.textContent=`Thanks, ${name}! Your availability has been recorded.`;
+  n.classList.remove('err');n.classList.add('show');
+  selectedDates.clear();renderScheduler();updateNextMeeting();
+  document.getElementById('rsvp-name').value='';
+}
+function addScheduleDates(){
+  const month=document.getElementById('new-month').value.trim();
+  const raw=document.getElementById('new-dates').value.trim();
+  const n=document.getElementById('sched-notif');
+  if(!month||!raw){n.textContent='Please fill in both fields.';n.classList.add('show','err');return;}
+  const entries=raw.split(',').map(s=>s.trim()).filter(Boolean);
+  SCHED_DATES.length=0;schedVotes.length=0;selectedDates.clear();
+  entries.forEach(e=>{
+    const parts=e.split(' ');
+    SCHED_DATES.push({day:parts[0]||'',num:parts[1]||e});
+    schedVotes.push(0);
+  });
+  schedMonth=month;
+  renderScheduler();updateNextMeeting();
+  n.textContent='Calendar updated.';n.classList.remove('err');n.classList.add('show');
+  document.getElementById('new-month').value='';document.getElementById('new-dates').value='';
+}
+
+// ─── NOTES ───────────────────────────────────────────────────────────────────
+function renderNotes(){
+  document.getElementById('notes-list').innerHTML=notes.length?notes.map(n=>`
+    <div class="note-item">
+      <div class="note-meta">
+        <span class="note-book-name">${n.book}</span>
+        <span class="badge b-smoke">${n.date}</span>
+        ${n.whiskey?`<span class="badge b-amber">🥃 ${n.whiskey}</span>`:''}
+      </div>
+      <div class="note-body">${n.body||n.text||''}</div>
+    </div>`).join('')
+  :'<p style="font-size:15px;color:var(--text-dim);font-style:italic;">No notes yet. Add your first entry below.</p>';
+}
+function addNote(){
+  const book=document.getElementById('note-book').value.trim();
+  const date=document.getElementById('note-date').value.trim();
+  const whiskey=document.getElementById('note-whiskey').value.trim();
+  const body=document.getElementById('note-text').value.trim();
+  const n=document.getElementById('note-notif');
+  if(!book||!body){n.textContent='Please fill in the book title and notes.';n.classList.add('show','err');return;}
+  notes.unshift({book,date:date||'Recent',whiskey,body});
+  renderNotes();
+  n.textContent='Notes saved. The archive grows.';n.classList.remove('err');n.classList.add('show');
+  ['note-book','note-date','note-whiskey','note-text'].forEach(id=>document.getElementById(id).value='');
+}
+
+// ─── BRACKET ENGINE ──────────────────────────────────────────────────────────
+let bracket={state:null}; // state: {rounds, currentRound, roundEndTime, roundDuration, votes, userVotes}
+let bracketTimer=null;
+
+function toggleAdmin(){
+  const p=document.getElementById('admin-panel');
+  const btn=document.getElementById('admin-toggle-btn');
+  p.classList.toggle('open');
+  btn.textContent=(p.classList.contains('open')?'▼ ':'▶ ')+'Configure & launch a new bracket';
+  if(p.classList.contains('open')&&!document.getElementById('books-input-list').children.length){
+    syncBookInputs();
+  }
+}
+
+function getBracketSize(){return parseInt(document.getElementById('bracket-size-sel').value);}
+function getRoundDuration(){return parseInt(document.getElementById('round-duration-sel').value)*1000;}
+
+document.getElementById('bracket-size-sel').addEventListener('change',syncBookInputs);
+
+function syncBookInputs(){
+  const size=getBracketSize();
+  document.getElementById('books-needed-label').textContent=`(${size} needed)`;
+  const list=document.getElementById('books-input-list');
+  const existing=Array.from(list.querySelectorAll('.book-input-row'));
+  // add rows up to size
+  while(list.children.length<size){
+    const i=list.children.length;
+    const row=document.createElement('div');
+    row.className='book-input-row';
+    row.innerHTML=`<span class="seed-badge">${i+1}</span>
+      <input type="text" placeholder="Title — Author" />
+      <button class="remove-book" onclick="removeBookInput(this)">✕</button>`;
+    list.appendChild(row);
+  }
+  // trim extra
+  while(list.children.length>size) list.removeChild(list.lastChild);
+}
+
+function addBookInput(){
+  const size=getBracketSize();
+  const list=document.getElementById('books-input-list');
+  if(list.children.length>=size){
+    const n=document.getElementById('bracket-notif');
+    n.textContent=`Bracket size is ${size}. Increase it or remove a book first.`;
+    n.classList.add('show','err');return;
+  }
+  const i=list.children.length;
+  const row=document.createElement('div');
+  row.className='book-input-row';
+  row.innerHTML=`<span class="seed-badge">${i+1}</span>
+    <input type="text" placeholder="Title — Author" />
+    <button class="remove-book" onclick="removeBookInput(this)">✕</button>`;
+  list.appendChild(row);
+}
+
+function removeBookInput(btn){btn.parentElement.remove();renumberSeeds();}
+function renumberSeeds(){
+  document.querySelectorAll('#books-input-list .seed-badge').forEach((s,i)=>s.textContent=i+1);
+}
+
+function parseBookEntry(str){
+  const parts=str.split('—').map(s=>s.trim());
+  if(parts.length>=2)return{title:parts[0],author:parts[1]};
+  const parts2=str.split(' by ').map(s=>s.trim());
+  if(parts2.length>=2)return{title:parts2[0],author:parts2[1]};
+  return{title:str,author:''};
+}
+
+function launchBracket(){
+  const size=getBracketSize();
+  const duration=getRoundDuration();
+  const inputs=Array.from(document.querySelectorAll('#books-input-list input'));
+  const books=inputs.map(i=>i.value.trim()).filter(Boolean);
+  const n=document.getElementById('bracket-notif');
+  n.classList.remove('err');
+  if(books.length<size){
+    n.textContent=`Please enter all ${size} books before launching.`;
+    n.classList.add('show','err');return;
+  }
+  const parsed=books.map(parseBookEntry);
+  // build rounds structure: round 0 = first round matchups
+  const numRounds=Math.log2(size);
+  const rounds=[];
+  // Seed: 1v(size), 2v(size-1) etc.
+  const r0matchups=[];
+  for(let i=0;i<size/2;i++){
+    r0matchups.push({a:parsed[i],b:parsed[size-1-i],winner:null});
+  }
+  rounds.push(r0matchups);
+  // Subsequent rounds are empty shells filled as bracket progresses
+  for(let r=1;r<numRounds;r++){
+    const count=size/Math.pow(2,r+1);
+    const matchups=[];
+    for(let i=0;i<count;i++) matchups.push({a:null,b:null,winner:null});
+    rounds.push(matchups);
+  }
+  bracket.state={rounds,currentRound:0,roundDuration:duration,
+    roundEndTime:Date.now()+duration,
+    votes:{},userVotes:{}};
+  startBracketTimer();
+  renderBracket();
+  // Close admin panel
+  document.getElementById('admin-panel').classList.remove('open');
+  document.getElementById('admin-toggle-btn').textContent='▶ Configure & launch a new bracket';
+  n.textContent='Bracket launched! Round 1 voting is now open.';n.classList.add('show');
+}
+
+function resetBracket(){
+  if(!confirm('Reset the entire bracket? All votes will be lost.'))return;
+  bracket.state=null;
+  if(bracketTimer)clearInterval(bracketTimer);
+  renderBracket();
+  document.getElementById('champion-display').innerHTML='';
+}
+
+function voteBook(roundIdx,matchIdx,choice){
+  if(!bracket.state)return;
+  const key=`${roundIdx}-${matchIdx}`;
+  if(bracket.state.userVotes[key]){return;} // already voted
+  if(bracket.state.currentRound!==roundIdx)return;
+  bracket.state.userVotes[key]=choice;
+  if(!bracket.state.votes[key])bracket.state.votes[key]={a:0,b:0};
+  bracket.state.votes[key][choice]++;
+  renderBracket();
+}
+
+function advanceRound(){
+  const st=bracket.state;
+  if(!st)return;
+  const round=st.rounds[st.currentRound];
+  // determine winners
+  round.forEach((m,mi)=>{
+    if(m.winner||!m.a)return;
+    const key=`${st.currentRound}-${mi}`;
+    const v=st.votes[key]||{a:0,b:0};
+    let winner;
+    if(v.a>v.b) winner=m.a;
+    else if(v.b>v.a) winner=m.b;
+    else winner=Math.random()<0.5?m.a:m.b; // tie-break
+    m.winner=winner;
+    // slot winner into next round
+    if(st.currentRound+1<st.rounds.length){
+      const nextMatchIdx=Math.floor(mi/2);
+      const slot=mi%2===0?'a':'b';
+      st.rounds[st.currentRound+1][nextMatchIdx][slot]=winner;
+    }
+  });
+  const finalRound=st.currentRound===st.rounds.length-1;
+  if(finalRound){
+    // champion
+    const champ=round[0].winner;
+    renderBracket();
+    renderChampion(champ);
+    if(bracketTimer)clearInterval(bracketTimer);
+  } else {
+    st.currentRound++;
+    st.roundEndTime=Date.now()+st.roundDuration;
+    renderBracket();
+  }
+}
+
+function startBracketTimer(){
+  if(bracketTimer)clearInterval(bracketTimer);
+  bracketTimer=setInterval(()=>{
+    if(!bracket.state)return;
+    if(Date.now()>=bracket.state.roundEndTime) advanceRound();
+    else renderTimers();
+  },1000);
+}
+
+function fmtTime(ms){
+  if(ms<=0)return'Closing…';
+  const s=Math.floor(ms/1000);
+  const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
+  if(h>0)return`${h}h ${m}m remaining`;
+  if(m>0)return`${m}m ${sec}s remaining`;
+  return`${sec}s remaining`;
+}
+
+function renderTimers(){
+  if(!bracket.state)return;
+  const remaining=bracket.state.roundEndTime-Date.now();
+  document.querySelectorAll('.matchup-timer').forEach(el=>{
+    el.textContent=fmtTime(remaining);
+    el.classList.toggle('urgent',remaining<300000);
+  });
+}
+
+function getRoundName(roundIdx,totalRounds){
+  const fr=totalRounds-1-roundIdx;
+  if(fr===0)return'Championship';
+  if(fr===1)return'Semifinals';
+  if(fr===2)return'Quarterfinals';
+  return`Round ${roundIdx+1}`;
+}
+
+function renderBracket(){
+  const disp=document.getElementById('bracket-display');
+  const st=bracket.state;
+  if(!st){disp.innerHTML='<p style="font-size:15px;color:var(--text-dim);font-style:italic;text-align:center;padding:20px 0;">No bracket active. Use Admin Controls above to launch one.</p>';return;}
+  const totalRounds=st.rounds.length;
+  const remaining=st.roundEndTime-Date.now();
+  let html='<div class="bracket-wrap"><div class="bracket-rounds">';
+  st.rounds.forEach((round,ri)=>{
+    const isActive=ri===st.currentRound;
+    const isPast=ri<st.currentRound;
+    html+=`<div class="bracket-round">
+      <div class="round-label">${getRoundName(ri,totalRounds)}</div>
+      <div class="round-slots">`;
+    round.forEach((m,mi)=>{
+      if(!m.a&&!m.b){html+=`<div class="matchup"><div class="matchup-bye">Awaiting results…</div></div>`;return;}
+      if(!m.b){html+=`<div class="matchup"><div class="matchup-bye">Bye — ${m.a.title}</div></div>`;return;}
+      const key=`${ri}-${mi}`;
+      const v=st.votes[key]||{a:0,b:0};
+      const total=v.a+v.b;
+      const userVote=st.userVotes[key];
+      const roundDone=isPast||m.winner;
+      html+=`<div class="matchup${isActive?' active-round':''}">`;
+      ['a','b'].forEach(side=>{
+        const book=m[side];if(!book)return;
+        let cls='matchup-book';
+        if(userVote===side) cls+=' voted-for';
+        if(roundDone&&m.winner===book) cls+=' winner';
+        if(roundDone&&m.winner&&m.winner!==book) cls+=' loser';
+        const pct=total?Math.round(v[side]/total*100):0;
+        const crown=roundDone&&m.winner===book?' <span class="mb-crown">👑</span>':'';
+        html+=`<div class="${cls}" onclick="voteBook(${ri},${mi},'${side}')">
+          <div style="flex:1">
+            <div class="mb-title">${book.title}${crown}</div>
+            ${book.author?`<div class="mb-author">${book.author}</div>`:''}
+            ${(isActive||roundDone)?`<div style="margin-top:5px;height:2px;background:rgba(200,132,26,.14);border-radius:1px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--amber);border-radius:1px;transition:width .4s"></div></div>`:''}
+          </div>
+          ${(isActive||roundDone)?`<div class="mb-votes">${v[side]}<span style="font-size:10px;color:var(--text-dim);margin-left:2px">v</span></div>`:''}
+        </div>`;
+      });
+      if(!roundDone&&isActive) html+=`<div class="matchup-vs">VS</div>`;
+      if(isActive) html+=`<div class="matchup-timer">${fmtTime(remaining)}</div>`;
+      html+='</div>';
+    });
+    html+='</div></div>';
+    if(ri<totalRounds-1) html+='<div class="connector"><div class="conn-line"></div></div>';
+  });
+  html+='</div></div>';
+  disp.innerHTML=html;
+}
+
+function renderChampion(book){
+  if(!book){document.getElementById('champion-display').innerHTML='';return;}
+  document.getElementById('champion-display').innerHTML=`
+    <div class="bracket-champ">
+      <div class="champ-label">🏆 Champion — Next Club Read</div>
+      <div class="champ-title">${book.title}</div>
+      ${book.author?`<div class="champ-author">${book.author}</div>`:''}
+    </div>`;
+}
+
+// ─── INIT ────────────────────────────────────────────────────────────────────
+renderHistory();
+renderScheduler();
+updateNextMeeting();
+renderNotes();
+renderBracket();
+</script>
+</body>
+</html>
