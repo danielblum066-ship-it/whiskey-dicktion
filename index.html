@@ -900,17 +900,34 @@ function normaliseArray(val){
 
 function normaliseBracket(data){
   if(!data) return null;
-  // Rounds
   data.rounds = normaliseArray(data.rounds).map(round=>{
     return normaliseArray(round).map(matchup=>{
       if(!matchup) return {a:null,b:null,winner:null};
-      return matchup;
+      // Convert sentinels back to null for rendering logic
+      return {
+        a: matchup.a==='__tbd__' ? null : matchup.a,
+        b: matchup.b==='__tbd__' ? null : matchup.b,
+        winner: matchup.winner==='__none__' ? null : matchup.winner
+      };
     });
   });
-  // Votes: plain object keyed by matchup string — no array conversion needed
   if(!data.votes) data.votes={};
   if(!data.voterChoices) data.voterChoices={};
   return data;
+}
+
+// Before saving to Firebase, convert null slots back to sentinel strings
+// so Firebase doesn't silently delete them
+function encodeForFirebase(state){
+  const s=JSON.parse(JSON.stringify(state));
+  s.rounds=s.rounds.map(round=>
+    round.map(m=>({
+      a: m.a===null ? '__tbd__' : m.a,
+      b: m.b===null ? '__tbd__' : m.b,
+      winner: m.winner===null ? '__none__' : m.winner
+    }))
+  );
+  return s;
 }
 
 async function saveBracket(state){
@@ -969,19 +986,33 @@ async function launchBracket(){
   const books=Array.from(document.querySelectorAll('#books-input-list input')).map(i=>i.value.trim()).filter(Boolean);
   if(books.length<size){showNotif('bracket-notif',`Please enter all ${size} books before launching.`,true);return;}
   const parsed=books.map(parseBookEntry);
-  const numRounds=Math.log2(size);const rounds=[];
-  const r0=[];for(let i=0;i<size/2;i++)r0.push({a:parsed[i],b:parsed[size-1-i],winner:null});
+  const numRounds=Math.log2(size);
+  const rounds=[];
+
+  // Round 0 — seeded matchups: 1v8, 2v7, 3v6, 4v5 etc.
+  const r0=[];
+  for(let i=0;i<size/2;i++) r0.push({a:parsed[i], b:parsed[size-1-i], winner:null});
   rounds.push(r0);
+
+  // Subsequent rounds — empty slots filled as winners advance
   for(let r=1;r<numRounds;r++){
-    const c=size/Math.pow(2,r+1);const m=[];
-    for(let i=0;i<c;i++)m.push({a:null,b:null,winner:null});
-    rounds.push(m);
+    const count=size/Math.pow(2,r+1);
+    const round=[];
+    for(let i=0;i<count;i++) round.push({a:null, b:null, winner:null});
+    rounds.push(round);
   }
-  // votes: {matchupKey: {a:N, b:N}}
-  // voterChoices: {safeVoterName: {roundKey: {matchupKey: side}}}
-  const state={rounds,currentRound:0,roundDuration:duration,roundEndTime:Date.now()+duration,votes:{},voterChoices:{}};
+
+  const state={
+    rounds,
+    currentRound:0,
+    roundDuration:duration,
+    roundEndTime:Date.now()+duration,
+    votes:{},
+    voterChoices:{},
+    bracketSize:size
+  };
   pendingVotes={};
-  await saveBracket(state);
+  await saveBracket(encodeForFirebase(state));
   document.getElementById('admin-panel').classList.remove('open');
   document.getElementById('admin-toggle-btn').textContent='▶ Configure & launch a new bracket';
   showNotif('bracket-notif','Bracket launched! Round 1 voting is now open.');
@@ -1092,7 +1123,7 @@ async function submitVotes(){
     fresh.voterChoices[vk][roundKey]=prevRoundChoices;
     pendingVotes={};
 
-    await saveBracket(fresh);
+    await saveBracket(encodeForFirebase(fresh));
 
     // Show confirmation modal
     const isUpdate=Object.keys(prevRoundChoices).length>0&&changed===0;
@@ -1138,19 +1169,25 @@ async function advanceRound(st){
     if(m.winner||!m.a||!m.b)return;
     const key=`${st.currentRound}-${mi}`;
     const v=st.votes&&st.votes[key]?st.votes[key]:{a:0,b:0};
-    let w=v.a>v.b?m.a:v.b>v.a?m.b:Math.random()<.5?m.a:m.b;
+    const w=v.a>v.b?m.a:v.b>v.a?m.b:Math.random()<.5?m.a:m.b;
     m.winner=w;
+    // Slot winner into next round if it exists
     if(st.currentRound+1<st.rounds.length){
       const nmi=Math.floor(mi/2);
-      st.rounds[st.currentRound+1][nmi][mi%2===0?'a':'b']=w;
+      const slot=mi%2===0?'a':'b';
+      st.rounds[st.currentRound+1][nmi][slot]=w;
     }
   });
+
+  // Re-encode nulls as sentinels before writing back to Firebase
+  const encoded=encodeForFirebase(st);
+
   const isLast=st.currentRound===st.rounds.length-1;
   if(!isLast){
-    st.currentRound++;
-    st.roundEndTime=Date.now()+st.roundDuration;
+    encoded.currentRound=st.currentRound+1;
+    encoded.roundEndTime=Date.now()+st.roundDuration;
   }
-  await saveBracket(st);
+  await saveBracket(encoded);
 }
 
 function startBracketTimer(st){
