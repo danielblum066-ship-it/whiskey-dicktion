@@ -237,6 +237,14 @@ nav{position:sticky;top:0;z-index:200;background:rgba(16,10,6,0.94);backdrop-fil
 .round-timer-val{font-family:'Playfair Display',serif;font-size:26px;color:var(--amber-light);letter-spacing:.03em;line-height:1;}
 .round-timer-bar.urgent .round-timer-val{color:#E08050;}
 
+/* SUBMIT VOTES BAR */
+.submit-votes-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+  background:rgba(42,32,24,.8);border:1px solid rgba(200,132,26,.28);border-radius:7px;
+  padding:12px 18px;margin-bottom:10px;}
+
+/* SELECTED matchup choice (pending, not yet submitted) */
+.matchup-book.selected{background:rgba(200,132,26,.22);border-left:3px solid var(--amber);}
+
 /* DATE EDIT LIST */
 .date-edit-row{display:flex;gap:8px;margin-bottom:6px;align-items:center;}
 .date-edit-row input{background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.22);
@@ -524,8 +532,34 @@ nav{position:sticky;top:0;z-index:200;background:rgba(16,10,6,0.94);backdrop-fil
   </div>
 </div>
 
-<script>
-// ─── DATA ────────────────────────────────────────────────────────────────────
+<script type="module">
+// ─── FIREBASE SETUP ──────────────────────────────────────────────────────────
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getDatabase, ref, set, get, onValue, push, remove }
+  from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyB__u3vTPqFGmcMBrUl-YaHKcneSJfPxz0",
+  authDomain: "whiskey-diction.firebaseapp.com",
+  databaseURL: "https://whiskey-diction-default-rtdb.firebaseio.com",
+  projectId: "whiskey-diction",
+  storageBucket: "whiskey-diction.firebasestorage.app",
+  messagingSenderId: "511733503185",
+  appId: "1:511733503185:web:005824edd8f2f5350e61f0"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+// Convenience helpers
+const dbRef  = path => ref(db, path);
+const dbSet  = (path, val) => set(dbRef(path), val);
+const dbGet  = path => get(dbRef(path)).then(s => s.val());
+const dbLive = (path, cb) => onValue(dbRef(path), s => cb(s.val()));
+const dbPush = (path, val) => push(dbRef(path), val);
+const dbDel  = path => remove(dbRef(path));
+
+// ─── STATIC DATA ─────────────────────────────────────────────────────────────
 const HISTORY=[
   {title:'Contact',author:'Carl Sagan',year:'2024'},
   {title:'Red Rising',author:'Pierce Brown',year:'2024'},
@@ -538,23 +572,15 @@ const HISTORY=[
   {title:'Six of Crows',author:'Leigh Bardugo',year:'2025 (current)'},
 ];
 
+// Local schedule state — synced from Firebase
 let SCHED_DATES=[
   {day:'Mon',num:'5'},{day:'Wed',num:'7'},{day:'Sat',num:'10'},
   {day:'Sun',num:'11'},{day:'Mon',num:'12'},{day:'Wed',num:'14'},
   {day:'Thu',num:'15'},{day:'Fri',num:'16'},{day:'Sat',num:'17'},{day:'Sun',num:'18'}
 ];
-let schedVotes=[2,1,4,3,2,3,5,4,7,3];
+let schedVotes=[0,0,0,0,0,0,0,0,0,0];
 let schedMonth='May 2025';
 let selectedDates=new Set();
-
-let notes=[
-  {book:'The Three Musketeers',date:'February 2025',whiskey:"Michter's US*1",
-    body:"<strong>Consensus:</strong> Far more fun than anyone expected from a 19th-century French adventure. Athos emerged as the unexpected favourite — a broken aristocrat hiding in plain sight. The swashbuckling set pieces held up surprisingly well. <strong>Best argument:</strong> Is d'Artagnan a hero or just extraordinarily lucky?"},
-  {book:'The Master and Margarita',date:'October 2024',whiskey:'Ardbeg 10',
-    body:'<strong>Consensus:</strong> Bewildering, brilliant, and unlike anything else. The Satan-visits-Soviet-Moscow conceit landed better with some members than others. Chapters were read aloud. <strong>Most heated exchange:</strong> Is Woland the villain or the most honest character in the book?'},
-  {book:'The Wager',date:'July 2024',whiskey:'Eagle Rare',
-    body:'<strong>Consensus:</strong> Grann at his best — survival, mutiny, and the slipperiness of truth. The real-life courtroom drama at the end shocked everyone who hadn\'t looked it up beforehand. <strong>Quote of the night:</strong> "Every man has his breaking point. This book finds several."'},
-];
 
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
 function showPage(id){
@@ -564,6 +590,7 @@ function showPage(id){
   document.getElementById('nb-'+id).classList.add('active');
   window.scrollTo(0,0);
 }
+window.showPage = showPage;
 
 // ─── GENERIC PANEL TOGGLE ────────────────────────────────────────────────────
 function togglePanel(panelId,btnId){
@@ -572,7 +599,6 @@ function togglePanel(panelId,btnId){
   const isOpen=panel.classList.contains('open');
   panel.classList.toggle('open');
   btn.classList.toggle('active',!isOpen);
-  // Pre-fill fields when opening
   if(!isOpen){
     if(panelId==='book-edit'){
       document.getElementById('edit-title').value=document.getElementById('cur-title').textContent;
@@ -592,6 +618,7 @@ function togglePanel(panelId,btnId){
     }
   }
 }
+window.togglePanel = togglePanel;
 
 // ─── HERO BANNER ─────────────────────────────────────────────────────────────
 function applyHeroTagline(){
@@ -600,13 +627,11 @@ function applyHeroTagline(){
   document.getElementById('hero-tagline').textContent=val;
   showNotif('hero-notif','Tagline updated.');
 }
-
 function applyHeroUrl(){
   const url=document.getElementById('hero-url-input').value.trim();
   if(!url){showNotif('hero-notif','Please paste an image URL.',true);return;}
   setBannerImage(url);
 }
-
 function handleBannerUpload(input){
   if(!input.files||!input.files[0])return;
   const reader=new FileReader();
@@ -617,15 +642,15 @@ function handleBannerUpload(input){
   };
   reader.readAsDataURL(input.files[0]);
 }
-
 function setBannerImage(src){
   const img=document.getElementById('hero-img');
-  const placeholder=document.getElementById('hero-placeholder');
-  img.src=src;
-  img.style.display='block';
-  placeholder.style.display='none';
+  const ph=document.getElementById('hero-placeholder');
+  img.src=src; img.style.display='block'; ph.style.display='none';
   showNotif('hero-notif','Banner image updated.');
 }
+window.applyHeroTagline=applyHeroTagline;
+window.applyHeroUrl=applyHeroUrl;
+window.handleBannerUpload=handleBannerUpload;
 
 // ─── CURRENTLY READING ───────────────────────────────────────────────────────
 function saveCurrentBook(){
@@ -638,6 +663,7 @@ function saveCurrentBook(){
   if(desc)document.getElementById('cur-desc').textContent=desc;
   showNotif('book-notif','Currently reading updated.');
 }
+window.saveCurrentBook=saveCurrentBook;
 
 // ─── NEXT MEETING ────────────────────────────────────────────────────────────
 function saveMeeting(){
@@ -651,14 +677,16 @@ function saveMeeting(){
   if(loc)document.getElementById('next-location').textContent='📍 '+loc;
   showNotif('meeting-notif','Meeting details updated.');
 }
+window.saveMeeting=saveMeeting;
 
 // ─── HISTORY ─────────────────────────────────────────────────────────────────
 function renderHistory(){
-  document.getElementById('history-tbody').innerHTML=HISTORY.map(b=>`<tr><td>${b.title}</td><td>${b.author}</td><td>${b.year}</td></tr>`).join('');
+  document.getElementById('history-tbody').innerHTML=
+    HISTORY.map(b=>`<tr><td>${b.title}</td><td>${b.author}</td><td>${b.year}</td></tr>`).join('');
   document.getElementById('books-read-count').textContent=HISTORY.length+' books read';
 }
 
-// ─── SCHEDULER ───────────────────────────────────────────────────────────────
+// ─── SCHEDULE — Firebase-backed ──────────────────────────────────────────────
 function renderScheduler(){
   const max=Math.max(...schedVotes,1);
   document.getElementById('sched-grid').innerHTML=SCHED_DATES.map((d,i)=>`
@@ -670,8 +698,8 @@ function renderScheduler(){
     </div>`).join('');
 }
 
-function updateNextMeeting(){
-  const max=Math.max(...schedVotes);
+function updateNextMeetingDisplay(){
+  const max=Math.max(...schedVotes,1);
   const idx=schedVotes.indexOf(max);
   const d=SCHED_DATES[idx];
   const parts=schedMonth.split(' ');
@@ -679,50 +707,54 @@ function updateNextMeeting(){
   document.getElementById('next-date').textContent=d?d.num:'—';
 }
 
-function toggleDate(i){selectedDates.has(i)?selectedDates.delete(i):selectedDates.add(i);renderScheduler();}
-
-function submitRsvp(){
-  const name=document.getElementById('rsvp-name').value.trim();
-  const n='rsvp-notif';
-  if(!name){showNotif(n,'Please enter your name.',true);return;}
-  if(!selectedDates.size){showNotif(n,'Please select at least one date.',true);return;}
-  selectedDates.forEach(i=>schedVotes[i]++);
-  const badge=document.createElement('span');
-  badge.className='badge b-amber';badge.textContent=name;
-  document.getElementById('attendees').appendChild(badge);
-  showNotif(n,`Thanks, ${name}! Your availability has been recorded.`);
-  selectedDates.clear();renderScheduler();updateNextMeeting();
-  document.getElementById('rsvp-name').value='';
+function toggleDate(i){
+  selectedDates.has(i)?selectedDates.delete(i):selectedDates.add(i);
+  renderScheduler();
 }
+window.toggleDate=toggleDate;
 
-// ─── DATE EDITOR ─────────────────────────────────────────────────────────────
+async function submitRsvp(){
+  const name=document.getElementById('rsvp-name').value.trim();
+  if(!name){showNotif('rsvp-notif','Please enter your name.',true);return;}
+  if(!selectedDates.size){showNotif('rsvp-notif','Please select at least one date.',true);return;}
+
+  // Write each selected date vote to Firebase
+  const updates=[];
+  selectedDates.forEach(i=>{
+    schedVotes[i]++;
+    updates.push(dbSet(`schedule/votes/${i}`, schedVotes[i]));
+  });
+  // Append attendee name
+  updates.push(dbPush('schedule/attendees', name));
+  await Promise.all(updates);
+
+  selectedDates.clear();
+  renderScheduler();
+  updateNextMeetingDisplay();
+  document.getElementById('rsvp-name').value='';
+  showNotif('rsvp-notif',`Thanks, ${name}! Your availability has been recorded.`);
+}
+window.submitRsvp=submitRsvp;
+
+// Date editor
 function buildDateEditList(){
-  const list=document.getElementById('date-edit-list');
-  list.innerHTML=SCHED_DATES.map((d,i)=>`
+  document.getElementById('date-edit-list').innerHTML=SCHED_DATES.map((d,i)=>`
     <div class="date-edit-row" id="der-${i}">
       <input class="inp-day" type="text" value="${d.day}" placeholder="Mon">
       <input class="inp-num" type="text" value="${d.num}" placeholder="5">
-      <button class="remove-date" onclick="removeDateRow(${i})">✕</button>
+      <button class="remove-date" onclick="document.getElementById('der-${i}').remove()">✕</button>
     </div>`).join('');
 }
-
-function removeDateRow(i){
-  const el=document.getElementById('der-'+i);
-  if(el)el.remove();
-}
-
 function addDateEditRow(){
-  const list=document.getElementById('date-edit-list');
-  const idx=Date.now(); // unique key
+  const idx=Date.now();
   const row=document.createElement('div');
   row.className='date-edit-row';row.id='der-'+idx;
   row.innerHTML=`<input class="inp-day" type="text" placeholder="Mon">
     <input class="inp-num" type="text" placeholder="5">
     <button class="remove-date" onclick="this.parentElement.remove()">✕</button>`;
-  list.appendChild(row);
+  document.getElementById('date-edit-list').appendChild(row);
 }
-
-function applyDateEdits(){
+async function applyDateEdits(){
   const month=document.getElementById('dates-month-input').value.trim();
   const rows=document.querySelectorAll('#date-edit-list .date-edit-row');
   const newDates=[];
@@ -732,58 +764,119 @@ function applyDateEdits(){
     if(day&&num)newDates.push({day,num});
   });
   if(!newDates.length){showNotif('dates-notif','Please add at least one date.',true);return;}
-  SCHED_DATES.length=0;schedVotes.length=0;selectedDates.clear();
-  newDates.forEach(d=>{SCHED_DATES.push(d);schedVotes.push(0);});
-  if(month)schedMonth=month;
-  renderScheduler();updateNextMeeting();
+
+  const newVotes=newDates.map(()=>0);
+  // Save to Firebase
+  await Promise.all([
+    dbSet('schedule/dates', newDates),
+    dbSet('schedule/votes', newVotes),
+    dbSet('schedule/month', month||schedMonth),
+    dbDel('schedule/attendees'),
+  ]);
   showNotif('dates-notif','Dates updated successfully.');
 }
+window.buildDateEditList=buildDateEditList;
+window.addDateEditRow=addDateEditRow;
+window.applyDateEdits=applyDateEdits;
 
-// ─── NOTES ───────────────────────────────────────────────────────────────────
-function renderNotes(){
-  document.getElementById('notes-list').innerHTML=notes.length
-    ?notes.map(n=>`<div class="note-item">
+// Live-sync schedule from Firebase
+function initScheduleSync(){
+  dbLive('schedule', data => {
+    if(!data) return;
+    if(data.dates && Array.isArray(data.dates)){
+      SCHED_DATES.length=0;
+      data.dates.forEach(d=>SCHED_DATES.push(d));
+    }
+    if(data.votes && Array.isArray(data.votes)){
+      schedVotes.length=0;
+      data.votes.forEach(v=>schedVotes.push(v||0));
+      // Pad if lengths differ
+      while(schedVotes.length<SCHED_DATES.length)schedVotes.push(0);
+    }
+    if(data.month) schedMonth=data.month;
+
+    // Render attendees
+    const attendeesEl=document.getElementById('attendees');
+    attendeesEl.innerHTML='';
+    if(data.attendees){
+      Object.values(data.attendees).forEach(name=>{
+        const b=document.createElement('span');
+        b.className='badge b-smoke';b.textContent=name;
+        attendeesEl.appendChild(b);
+      });
+    }
+    if(!attendeesEl.children.length){
+      attendeesEl.innerHTML='<span class="badge b-amber">Be the first to RSVP</span>';
+    }
+    renderScheduler();
+    updateNextMeetingDisplay();
+  });
+}
+
+// ─── NOTES — Firebase-backed ─────────────────────────────────────────────────
+let notesCache=[];
+
+function renderNotes(data){
+  const list=document.getElementById('notes-list');
+  if(!data||!Object.keys(data).length){
+    list.innerHTML='<p style="font-size:15px;color:var(--text-dim);font-style:italic;">No notes yet. Add your first entry below.</p>';
+    return;
+  }
+  // Sort newest first by timestamp
+  const entries=Object.entries(data).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
+  list.innerHTML=entries.map(([,n])=>`
+    <div class="note-item">
       <div class="note-meta">
         <span class="note-book-name">${n.book}</span>
         <span class="badge b-smoke">${n.date}</span>
         ${n.whiskey?`<span class="badge b-amber">🥃 ${n.whiskey}</span>`:''}
       </div>
       <div class="note-body">${n.body||''}</div>
-    </div>`).join('')
-    :'<p style="font-size:15px;color:var(--text-dim);font-style:italic;">No notes yet. Add your first entry below.</p>';
+    </div>`).join('');
 }
 
-function addNote(){
+async function addNote(){
   const book=document.getElementById('note-book').value.trim();
   const date=document.getElementById('note-date').value.trim();
   const whiskey=document.getElementById('note-whiskey').value.trim();
   const body=document.getElementById('note-text').value.trim();
   if(!book||!body){showNotif('note-notif','Please fill in the book title and notes.',true);return;}
-  notes.unshift({book,date:date||'Recent',whiskey,body});
-  renderNotes();
+  await dbPush('notes', {book, date:date||'Recent', whiskey, body, ts:Date.now()});
   showNotif('note-notif','Notes saved. The archive grows.');
   ['note-book','note-date','note-whiskey','note-text'].forEach(id=>document.getElementById(id).value='');
 }
+window.addNote=addNote;
 
-// ─── BRACKET ─────────────────────────────────────────────────────────────────
-const BRACKET_KEY='wd_bracket_v1';
-let bracket={state:null};
+function initNotesSync(){
+  // Seed default notes only if none exist yet
+  dbGet('notes').then(existing=>{
+    if(!existing){
+      const defaults=[
+        {book:'The Three Musketeers',date:'February 2025',whiskey:"Michter's US*1",
+          body:"<strong>Consensus:</strong> Far more fun than anyone expected from a 19th-century French adventure. Athos emerged as the unexpected favourite — a broken aristocrat hiding in plain sight. <strong>Best argument:</strong> Is d'Artagnan a hero or just extraordinarily lucky?",ts:3},
+        {book:'The Master and Margarita',date:'October 2024',whiskey:'Ardbeg 10',
+          body:'<strong>Consensus:</strong> Bewildering, brilliant, and unlike anything else. Chapters were read aloud. <strong>Most heated exchange:</strong> Is Woland the villain or the most honest character in the book?',ts:2},
+        {book:'The Wager',date:'July 2024',whiskey:'Eagle Rare',
+          body:"<strong>Consensus:</strong> Grann at his best — survival, mutiny, and the slipperiness of truth. <strong>Quote of the night:</strong> \"Every man has his breaking point. This book finds several.\"",ts:1},
+      ];
+      defaults.forEach(n=>dbPush('notes',n));
+    }
+  });
+  dbLive('notes', data=>renderNotes(data));
+}
+
+// ─── BRACKET — Firebase-backed ───────────────────────────────────────────────
+let bracketState=null;
 let bracketTimer=null;
+let pendingVotes={};
+let submittedKeys=new Set();
 
-// Persist state to localStorage after every change
-function saveBracket(){
-  if(bracket.state) localStorage.setItem(BRACKET_KEY,JSON.stringify(bracket.state));
-  else localStorage.removeItem(BRACKET_KEY);
+async function saveBracket(state){
+  if(state) await dbSet('bracket', state);
+  else await dbDel('bracket');
 }
 
-// Restore state from localStorage on load
-function loadBracket(){
-  try{
-    const raw=localStorage.getItem(BRACKET_KEY);
-    if(raw) bracket.state=JSON.parse(raw);
-  }catch(e){bracket.state=null;}
-}
-
+// Admin helpers
 function toggleAdmin(){
   const p=document.getElementById('admin-panel');
   const btn=document.getElementById('admin-toggle-btn');
@@ -791,6 +884,7 @@ function toggleAdmin(){
   btn.textContent=(p.classList.contains('open')?'▼ ':'▶ ')+'Configure & launch a new bracket';
   if(p.classList.contains('open')&&!document.getElementById('books-input-list').children.length)syncBookInputs();
 }
+window.toggleAdmin=toggleAdmin;
 
 function getBracketSize(){return parseInt(document.getElementById('bracket-size-sel').value);}
 function getRoundDuration(){return parseInt(document.getElementById('round-duration-sel').value)*1000;}
@@ -803,25 +897,32 @@ function syncBookInputs(){
   while(list.children.length<size){
     const i=list.children.length;
     const row=document.createElement('div');row.className='book-input-row';
-    row.innerHTML=`<span class="seed-badge">${i+1}</span><input type="text" placeholder="Title — Author"><button class="remove-book" onclick="removeBookInput(this)">✕</button>`;
+    row.innerHTML=`<span class="seed-badge">${i+1}</span><input type="text" placeholder="Title — Author"><button class="remove-book" onclick="this.parentElement.remove();renumberSeeds()">✕</button>`;
     list.appendChild(row);
   }
   while(list.children.length>size)list.removeChild(list.lastChild);
 }
+function renumberSeeds(){
+  document.querySelectorAll('#books-input-list .seed-badge').forEach((s,i)=>s.textContent=i+1);
+}
+window.renumberSeeds=renumberSeeds;
+
 function addBookInput(){
   const size=getBracketSize();const list=document.getElementById('books-input-list');
   if(list.children.length>=size){showNotif('bracket-notif',`Bracket size is ${size}. Increase it or remove a book first.`,true);return;}
   const i=list.children.length;const row=document.createElement('div');row.className='book-input-row';
-  row.innerHTML=`<span class="seed-badge">${i+1}</span><input type="text" placeholder="Title — Author"><button class="remove-book" onclick="removeBookInput(this)">✕</button>`;
+  row.innerHTML=`<span class="seed-badge">${i+1}</span><input type="text" placeholder="Title — Author"><button class="remove-book" onclick="this.parentElement.remove();renumberSeeds()">✕</button>`;
   list.appendChild(row);
 }
-function removeBookInput(btn){btn.parentElement.remove();document.querySelectorAll('#books-input-list .seed-badge').forEach((s,i)=>s.textContent=i+1);}
+window.addBookInput=addBookInput;
+
 function parseBookEntry(str){
   const p=str.split('—').map(s=>s.trim());if(p.length>=2)return{title:p[0],author:p[1]};
   const p2=str.split(' by ').map(s=>s.trim());if(p2.length>=2)return{title:p2[0],author:p2[1]};
   return{title:str,author:''};
 }
-function launchBracket(){
+
+async function launchBracket(){
   const size=getBracketSize(),duration=getRoundDuration();
   const books=Array.from(document.querySelectorAll('#books-input-list input')).map(i=>i.value.trim()).filter(Boolean);
   if(books.length<size){showNotif('bracket-notif',`Please enter all ${size} books before launching.`,true);return;}
@@ -829,58 +930,93 @@ function launchBracket(){
   const numRounds=Math.log2(size);const rounds=[];
   const r0=[];for(let i=0;i<size/2;i++)r0.push({a:parsed[i],b:parsed[size-1-i],winner:null});
   rounds.push(r0);
-  for(let r=1;r<numRounds;r++){const c=size/Math.pow(2,r+1);const m=[];for(let i=0;i<c;i++)m.push({a:null,b:null,winner:null});rounds.push(m);}
-  bracket.state={rounds,currentRound:0,roundDuration:duration,roundEndTime:Date.now()+duration,votes:{},userVotes:{}};
-  saveBracket();
-  startBracketTimer();renderBracket();
+  for(let r=1;r<numRounds;r++){
+    const c=size/Math.pow(2,r+1);const m=[];
+    for(let i=0;i<c;i++)m.push({a:null,b:null,winner:null});
+    rounds.push(m);
+  }
+  const state={rounds,currentRound:0,roundDuration:duration,roundEndTime:Date.now()+duration,votes:{}};
+  pendingVotes={};submittedKeys=new Set();
+  await saveBracket(state);
   document.getElementById('admin-panel').classList.remove('open');
   document.getElementById('admin-toggle-btn').textContent='▶ Configure & launch a new bracket';
   showNotif('bracket-notif','Bracket launched! Round 1 voting is now open.');
 }
-function resetBracket(){
+window.launchBracket=launchBracket;
+
+async function resetBracket(){
   if(!confirm('Reset the bracket? All votes will be lost.'))return;
-  bracket.state=null;saveBracket();
-  if(bracketTimer)clearInterval(bracketTimer);
-  renderBracket();document.getElementById('champion-display').innerHTML='';
+  pendingVotes={};submittedKeys=new Set();
+  if(bracketTimer)clearInterval(bracketTimer);bracketTimer=null;
+  await saveBracket(null);
 }
-function voteBook(ri,mi,choice){
-  if(!bracket.state)return;const key=`${ri}-${mi}`;
-  if(bracket.state.userVotes[key]||bracket.state.currentRound!==ri)return;
-  bracket.state.userVotes[key]=choice;
-  if(!bracket.state.votes[key])bracket.state.votes[key]={a:0,b:0};
-  bracket.state.votes[key][choice]++;
-  saveBracket();
+window.resetBracket=resetBracket;
+
+// Voting — select then submit
+function selectChoice(ri,mi,side){
+  if(!bracketState)return;
+  const key=`${ri}-${mi}`;
+  if(submittedKeys.has(key)||bracketState.currentRound!==ri)return;
+  pendingVotes[key]=pendingVotes[key]===side?undefined:side;
+  if(pendingVotes[key]===undefined)delete pendingVotes[key];
   renderBracket();
 }
-function advanceRound(){
-  const st=bracket.state;if(!st)return;
+window.selectChoice=selectChoice;
+
+async function submitVotes(){
+  if(!bracketState)return;
+  const ri=bracketState.currentRound;
+  const fresh=JSON.parse(JSON.stringify(bracketState));
+  let count=0;
+  Object.entries(pendingVotes).forEach(([key,side])=>{
+    if(!side)return;
+    const[kri]=key.split('-').map(Number);
+    if(kri!==ri||submittedKeys.has(key))return;
+    if(!fresh.votes[key])fresh.votes[key]={a:0,b:0};
+    fresh.votes[key][side]++;
+    submittedKeys.add(key);
+    count++;
+  });
+  pendingVotes={};
+  if(count>0){
+    await saveBracket(fresh);
+    showNotif('vote-submit-notif',`${count} vote${count>1?'s':''} submitted. Results revealed when the round closes.`);
+  } else {
+    showNotif('vote-submit-notif','No new selections to submit.',true);
+  }
+}
+window.submitVotes=submitVotes;
+
+async function advanceRound(st){
   const round=st.rounds[st.currentRound];
   round.forEach((m,mi)=>{
-    if(m.winner||!m.a)return;
-    const key=`${st.currentRound}-${mi}`;const v=st.votes[key]||{a:0,b:0};
+    if(m.winner||!m.a||!m.b)return;
+    const key=`${st.currentRound}-${mi}`;
+    const v=st.votes&&st.votes[key]?st.votes[key]:{a:0,b:0};
     let w=v.a>v.b?m.a:v.b>v.a?m.b:Math.random()<.5?m.a:m.b;
     m.winner=w;
     if(st.currentRound+1<st.rounds.length){
-      const nmi=Math.floor(mi/2);const slot=mi%2===0?'a':'b';
-      st.rounds[st.currentRound+1][nmi][slot]=w;
+      const nmi=Math.floor(mi/2);
+      st.rounds[st.currentRound+1][nmi][mi%2===0?'a':'b']=w;
     }
   });
-  if(st.currentRound===st.rounds.length-1){
-    saveBracket();renderBracket();renderChampion(round[0].winner);
-    if(bracketTimer)clearInterval(bracketTimer);
-  } else {
-    st.currentRound++;st.roundEndTime=Date.now()+st.roundDuration;
-    saveBracket();renderBracket();
+  const isLast=st.currentRound===st.rounds.length-1;
+  if(!isLast){
+    st.currentRound++;
+    st.roundEndTime=Date.now()+st.roundDuration;
   }
+  await saveBracket(st);
 }
-function startBracketTimer(){
+
+function startBracketTimer(st){
   if(bracketTimer)clearInterval(bracketTimer);
   bracketTimer=setInterval(()=>{
-    if(!bracket.state)return;
-    if(Date.now()>=bracket.state.roundEndTime) advanceRound();
+    if(!bracketState)return;
+    if(Date.now()>=bracketState.roundEndTime) advanceRound(JSON.parse(JSON.stringify(bracketState)));
     else updateRoundTimer();
   },1000);
 }
+
 function fmtTime(ms){
   if(ms<=0)return'Closing…';const s=Math.floor(ms/1000);
   const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
@@ -888,112 +1024,151 @@ function fmtTime(ms){
   if(m>0)return`${m}m ${sec}s`;
   return`${sec}s`;
 }
+
 function updateRoundTimer(){
-  if(!bracket.state)return;
-  const rem=bracket.state.roundEndTime-Date.now();
+  if(!bracketState)return;
+  const rem=bracketState.roundEndTime-Date.now();
   const el=document.getElementById('round-timer-val');
   if(el){
     el.textContent=fmtTime(Math.max(0,rem));
     el.closest('.round-timer-bar').classList.toggle('urgent',rem<300000);
   }
 }
-function getRoundName(ri,total){const fr=total-1-ri;return fr===0?'Championship':fr===1?'Semifinals':fr===2?'Quarterfinals':`Round ${ri+1}`;}
+
+function getRoundName(ri,total){
+  const fr=total-1-ri;
+  return fr===0?'Championship':fr===1?'Semifinals':fr===2?'Quarterfinals':`Round ${ri+1}`;
+}
 
 function renderBracket(){
-  const disp=document.getElementById('bracket-display');const st=bracket.state;
+  const disp=document.getElementById('bracket-display');
+  const st=bracketState;
   if(!st){
     disp.innerHTML='<p style="font-size:15px;color:var(--text-dim);font-style:italic;text-align:center;padding:20px 0;">No bracket active. Use Admin Controls above to launch one.</p>';
     document.getElementById('champion-display').innerHTML='';
     return;
   }
-
-  // Check if bracket is fully complete
   const total=st.rounds.length;
   const lastRound=st.rounds[total-1];
   const champion=lastRound&&lastRound[0]&&lastRound[0].winner;
-
-  // Round timer banner — only shown when bracket is active and not yet complete
   const rem=st.roundEndTime-Date.now();
-  const roundName=getRoundName(st.currentRound,total);
+
   let timerHtml='';
   if(!champion){
     timerHtml=`<div class="round-timer-bar${rem<300000?' urgent':''}">
-      <div class="round-timer-label">${roundName} — Voting closes in</div>
+      <div class="round-timer-label">${getRoundName(st.currentRound,total)} — Voting closes in</div>
       <div class="round-timer-val" id="round-timer-val">${fmtTime(Math.max(0,rem))}</div>
     </div>`;
   }
 
+  const ri=st.currentRound;
+  const activeMatchups=!champion&&st.rounds[ri]?st.rounds[ri].filter(m=>m.a&&m.b&&!m.winner).length:0;
+  const pendingCount=Object.keys(pendingVotes).filter(k=>k.startsWith(ri+'-')&&pendingVotes[k]).length;
+  const allSubmitted=activeMatchups>0&&st.rounds[ri].filter(m=>m.a&&m.b&&!m.winner).every((_,mi)=>submittedKeys.has(`${ri}-${mi}`));
+
+  let submitHtml='';
+  if(!champion&&activeMatchups>0){
+    submitHtml=`<div class="submit-votes-bar">
+      <div style="font-size:14px;color:var(--text-dim);">
+        ${allSubmitted
+          ?'<span style="color:var(--amber);">✓ Your votes are in for this round.</span>'
+          :`Select your picks, then submit — <span style="color:var(--cream);">${pendingCount} selection${pendingCount!==1?'s':''} pending</span>`}
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="submitVotes()" ${pendingCount===0?'disabled style="opacity:.45;cursor:not-allowed"':''}>Submit Votes</button>
+    </div>
+    <div id="vote-submit-notif" class="notif" style="margin-bottom:12px;"></div>`;
+  }
+
   let h='<div class="bracket-wrap"><div class="bracket-rounds">';
-  st.rounds.forEach((round,ri)=>{
-    const isActive=ri===st.currentRound;const isPast=ri<st.currentRound;
-    h+=`<div class="bracket-round"><div class="round-label">${getRoundName(ri,total)}</div><div class="round-slots">`;
+  st.rounds.forEach((round,rri)=>{
+    const isActive=rri===st.currentRound;
+    const isPast=rri<st.currentRound;
+    h+=`<div class="bracket-round"><div class="round-label">${getRoundName(rri,total)}</div><div class="round-slots">`;
     round.forEach((m,mi)=>{
       if(!m.a&&!m.b){h+=`<div class="matchup"><div class="matchup-bye">Awaiting results…</div></div>`;return;}
       if(!m.b){h+=`<div class="matchup"><div class="matchup-bye">Bye — ${m.a.title}</div></div>`;return;}
-      const key=`${ri}-${mi}`;const v=st.votes[key]||{a:0,b:0};const tot=v.a+v.b;
-      const uv=st.userVotes[key];
-      // A round is "done" (votes visible) only when it's past, or when a winner is set
+      const key=`${rri}-${mi}`;
+      const v=(st.votes&&st.votes[key])||{a:0,b:0};
+      const tot=v.a+v.b;
       const done=isPast||!!m.winner;
+      const submitted=submittedKeys.has(key);
+      const pending=pendingVotes[key];
       h+=`<div class="matchup${isActive?' active-round':''}">`;
       ['a','b'].forEach(side=>{
         const book=m[side];if(!book)return;
-        let cls='matchup-book';
-        if(uv===side)cls+=' voted-for';
-        if(done&&m.winner===book)cls+=' winner';
-        if(done&&m.winner&&m.winner!==book)cls+=' loser';
         const pct=tot?Math.round(v[side]/tot*100):0;
-        const crown=done&&m.winner===book?' 👑':'';
-        // Show vote count + bar only when round is done; show checkmark if voted during active round
-        const votedTick=isActive&&uv===side?'<span style="font-size:12px;color:var(--amber);margin-left:6px;">✓</span>':'';
-        h+=`<div class="${cls}" onclick="voteBook(${ri},${mi},'${side}')">
+        const crown=done&&m.winner&&m.winner.title===book.title?' 👑':'';
+        let cls='matchup-book';
+        if(done&&m.winner&&m.winner.title===book.title)cls+=' winner';
+        else if(done&&m.winner&&m.winner.title!==book.title)cls+=' loser';
+        else if(!done&&pending===side)cls+=' selected';
+        else if(!done&&submitted)cls+=' voted-for';
+        const clickable=isActive&&!done&&!submitted;
+        h+=`<div class="${cls}"${clickable?` onclick="selectChoice(${rri},${mi},'${side}')" style="cursor:pointer;"`:''}>
           <div style="flex:1">
             <div class="mb-title">${book.title}${crown}</div>
             ${book.author?`<div class="mb-author">${book.author}</div>`:''}
             ${done?`<div style="margin-top:5px;height:2px;background:rgba(200,132,26,.14);border-radius:1px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--amber);border-radius:1px;transition:width .4s"></div></div>`:''}
           </div>
           ${done?`<div class="mb-votes">${v[side]}<span style="font-size:10px;color:var(--text-dim);margin-left:2px">v</span></div>`:''}
-          ${!done?votedTick:''}
+          ${(!done&&pending===side)?`<span style="font-size:13px;color:var(--amber-light);margin-left:6px;">●</span>`:''}
         </div>`;
       });
-      if(!done&&isActive)h+=`<div class="matchup-vs">VS</div>`;
+      if(!done&&isActive&&!submitted)h+=`<div class="matchup-vs">VS</div>`;
       h+='</div>';
     });
     h+='</div></div>';
-    if(ri<total-1)h+='<div class="connector"><div class="conn-line"></div></div>';
+    if(rri<total-1)h+='<div class="connector"><div class="conn-line"></div></div>';
   });
   h+='</div></div>';
-  disp.innerHTML=timerHtml+h;
+  disp.innerHTML=timerHtml+submitHtml+h;
 
-  if(champion) renderChampion(champion);
+  if(champion)renderChampion(champion);
+  else document.getElementById('champion-display').innerHTML='';
 }
 
 function renderChampion(book){
   if(!book){document.getElementById('champion-display').innerHTML='';return;}
-  document.getElementById('champion-display').innerHTML=`<div class="bracket-champ"><div class="champ-label">🏆 Champion — Next Club Read</div><div class="champ-title">${book.title}</div>${book.author?`<div class="champ-author">${book.author}</div>`:''}</div>`;
+  document.getElementById('champion-display').innerHTML=`
+    <div class="bracket-champ">
+      <div class="champ-label">🏆 Champion — Next Club Read</div>
+      <div class="champ-title">${book.title}</div>
+      ${book.author?`<div class="champ-author">${book.author}</div>`:''}
+    </div>`;
+}
+
+// Live-sync bracket from Firebase
+function initBracketSync(){
+  dbLive('bracket', data=>{
+    bracketState=data;
+    renderBracket();
+    if(data){
+      const last=data.rounds[data.rounds.length-1];
+      const finished=last&&last[0]&&last[0].winner;
+      if(!finished) startBracketTimer(data);
+      else{if(bracketTimer)clearInterval(bracketTimer);bracketTimer=null;}
+    } else {
+      if(bracketTimer)clearInterval(bracketTimer);bracketTimer=null;
+    }
+  });
 }
 
 // ─── UTILITY ─────────────────────────────────────────────────────────────────
 function showNotif(id,msg,isErr=false){
   const el=document.getElementById(id);
-  el.textContent=msg;el.classList.remove('err');
+  if(!el)return;
+  el.textContent=msg;
+  el.classList.remove('err');
   if(isErr)el.classList.add('err');
   el.classList.add('show');
 }
+window.showNotif=showNotif;
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 renderHistory();
-renderScheduler();
-updateNextMeeting();
-renderNotes();
-loadBracket();
-renderBracket();
-// Resume timer if bracket is active and not yet finished
-if(bracket.state){
-  const lastRound=bracket.state.rounds[bracket.state.rounds.length-1];
-  const finished=lastRound&&lastRound[0]&&lastRound[0].winner;
-  if(!finished) startBracketTimer();
-  else renderChampion(lastRound[0].winner);
-}
+initScheduleSync();
+initNotesSync();
+initBracketSync();
 </script>
 </body>
 </html>
