@@ -228,6 +228,15 @@ nav{position:sticky;top:0;z-index:200;background:rgba(16,10,6,0.94);backdrop-fil
 
 .smoke-line{width:100%;height:1px;background:linear-gradient(90deg,transparent,rgba(200,132,26,.2),transparent);margin:6px 0 22px;}
 
+/* ROUND TIMER BANNER */
+.round-timer-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;
+  background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.35);border-radius:7px;
+  padding:14px 20px;margin-bottom:18px;}
+.round-timer-bar.urgent{border-color:rgba(200,80,20,.6);background:rgba(30,10,4,.7);}
+.round-timer-label{font-size:13px;color:var(--text-dim);letter-spacing:.06em;text-transform:uppercase;}
+.round-timer-val{font-family:'Playfair Display',serif;font-size:26px;color:var(--amber-light);letter-spacing:.03em;line-height:1;}
+.round-timer-bar.urgent .round-timer-val{color:#E08050;}
+
 /* DATE EDIT LIST */
 .date-edit-row{display:flex;gap:8px;margin-bottom:6px;align-items:center;}
 .date-edit-row input{background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.22);
@@ -757,8 +766,23 @@ function addNote(){
 }
 
 // ─── BRACKET ─────────────────────────────────────────────────────────────────
+const BRACKET_KEY='wd_bracket_v1';
 let bracket={state:null};
 let bracketTimer=null;
+
+// Persist state to localStorage after every change
+function saveBracket(){
+  if(bracket.state) localStorage.setItem(BRACKET_KEY,JSON.stringify(bracket.state));
+  else localStorage.removeItem(BRACKET_KEY);
+}
+
+// Restore state from localStorage on load
+function loadBracket(){
+  try{
+    const raw=localStorage.getItem(BRACKET_KEY);
+    if(raw) bracket.state=JSON.parse(raw);
+  }catch(e){bracket.state=null;}
+}
 
 function toggleAdmin(){
   const p=document.getElementById('admin-panel');
@@ -807,6 +831,7 @@ function launchBracket(){
   rounds.push(r0);
   for(let r=1;r<numRounds;r++){const c=size/Math.pow(2,r+1);const m=[];for(let i=0;i<c;i++)m.push({a:null,b:null,winner:null});rounds.push(m);}
   bracket.state={rounds,currentRound:0,roundDuration:duration,roundEndTime:Date.now()+duration,votes:{},userVotes:{}};
+  saveBracket();
   startBracketTimer();renderBracket();
   document.getElementById('admin-panel').classList.remove('open');
   document.getElementById('admin-toggle-btn').textContent='▶ Configure & launch a new bracket';
@@ -814,7 +839,8 @@ function launchBracket(){
 }
 function resetBracket(){
   if(!confirm('Reset the bracket? All votes will be lost.'))return;
-  bracket.state=null;if(bracketTimer)clearInterval(bracketTimer);
+  bracket.state=null;saveBracket();
+  if(bracketTimer)clearInterval(bracketTimer);
   renderBracket();document.getElementById('champion-display').innerHTML='';
 }
 function voteBook(ri,mi,choice){
@@ -822,7 +848,9 @@ function voteBook(ri,mi,choice){
   if(bracket.state.userVotes[key]||bracket.state.currentRound!==ri)return;
   bracket.state.userVotes[key]=choice;
   if(!bracket.state.votes[key])bracket.state.votes[key]={a:0,b:0};
-  bracket.state.votes[key][choice]++;renderBracket();
+  bracket.state.votes[key][choice]++;
+  saveBracket();
+  renderBracket();
 }
 function advanceRound(){
   const st=bracket.state;if(!st)return;
@@ -837,27 +865,64 @@ function advanceRound(){
       st.rounds[st.currentRound+1][nmi][slot]=w;
     }
   });
-  if(st.currentRound===st.rounds.length-1){renderBracket();renderChampion(round[0].winner);if(bracketTimer)clearInterval(bracketTimer);}
-  else{st.currentRound++;st.roundEndTime=Date.now()+st.roundDuration;renderBracket();}
+  if(st.currentRound===st.rounds.length-1){
+    saveBracket();renderBracket();renderChampion(round[0].winner);
+    if(bracketTimer)clearInterval(bracketTimer);
+  } else {
+    st.currentRound++;st.roundEndTime=Date.now()+st.roundDuration;
+    saveBracket();renderBracket();
+  }
 }
 function startBracketTimer(){
   if(bracketTimer)clearInterval(bracketTimer);
-  bracketTimer=setInterval(()=>{if(!bracket.state)return;Date.now()>=bracket.state.roundEndTime?advanceRound():renderTimers();},1000);
+  bracketTimer=setInterval(()=>{
+    if(!bracket.state)return;
+    if(Date.now()>=bracket.state.roundEndTime) advanceRound();
+    else updateRoundTimer();
+  },1000);
 }
 function fmtTime(ms){
   if(ms<=0)return'Closing…';const s=Math.floor(ms/1000);
   const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=s%60;
-  return h>0?`${h}h ${m}m remaining`:m>0?`${m}m ${sec}s remaining`:`${sec}s remaining`;
+  if(h>0)return`${h}h ${m}m ${sec}s`;
+  if(m>0)return`${m}m ${sec}s`;
+  return`${sec}s`;
 }
-function renderTimers(){
-  if(!bracket.state)return;const rem=bracket.state.roundEndTime-Date.now();
-  document.querySelectorAll('.matchup-timer').forEach(el=>{el.textContent=fmtTime(rem);el.classList.toggle('urgent',rem<300000);});
+function updateRoundTimer(){
+  if(!bracket.state)return;
+  const rem=bracket.state.roundEndTime-Date.now();
+  const el=document.getElementById('round-timer-val');
+  if(el){
+    el.textContent=fmtTime(Math.max(0,rem));
+    el.closest('.round-timer-bar').classList.toggle('urgent',rem<300000);
+  }
 }
 function getRoundName(ri,total){const fr=total-1-ri;return fr===0?'Championship':fr===1?'Semifinals':fr===2?'Quarterfinals':`Round ${ri+1}`;}
+
 function renderBracket(){
   const disp=document.getElementById('bracket-display');const st=bracket.state;
-  if(!st){disp.innerHTML='<p style="font-size:15px;color:var(--text-dim);font-style:italic;text-align:center;padding:20px 0;">No bracket active. Use Admin Controls above to launch one.</p>';return;}
-  const total=st.rounds.length;const rem=st.roundEndTime-Date.now();
+  if(!st){
+    disp.innerHTML='<p style="font-size:15px;color:var(--text-dim);font-style:italic;text-align:center;padding:20px 0;">No bracket active. Use Admin Controls above to launch one.</p>';
+    document.getElementById('champion-display').innerHTML='';
+    return;
+  }
+
+  // Check if bracket is fully complete
+  const total=st.rounds.length;
+  const lastRound=st.rounds[total-1];
+  const champion=lastRound&&lastRound[0]&&lastRound[0].winner;
+
+  // Round timer banner — only shown when bracket is active and not yet complete
+  const rem=st.roundEndTime-Date.now();
+  const roundName=getRoundName(st.currentRound,total);
+  let timerHtml='';
+  if(!champion){
+    timerHtml=`<div class="round-timer-bar${rem<300000?' urgent':''}">
+      <div class="round-timer-label">${roundName} — Voting closes in</div>
+      <div class="round-timer-val" id="round-timer-val">${fmtTime(Math.max(0,rem))}</div>
+    </div>`;
+  }
+
   let h='<div class="bracket-wrap"><div class="bracket-rounds">';
   st.rounds.forEach((round,ri)=>{
     const isActive=ri===st.currentRound;const isPast=ri<st.currentRound;
@@ -866,7 +931,9 @@ function renderBracket(){
       if(!m.a&&!m.b){h+=`<div class="matchup"><div class="matchup-bye">Awaiting results…</div></div>`;return;}
       if(!m.b){h+=`<div class="matchup"><div class="matchup-bye">Bye — ${m.a.title}</div></div>`;return;}
       const key=`${ri}-${mi}`;const v=st.votes[key]||{a:0,b:0};const tot=v.a+v.b;
-      const uv=st.userVotes[key];const done=isPast||m.winner;
+      const uv=st.userVotes[key];
+      // A round is "done" (votes visible) only when it's past, or when a winner is set
+      const done=isPast||!!m.winner;
       h+=`<div class="matchup${isActive?' active-round':''}">`;
       ['a','b'].forEach(side=>{
         const book=m[side];if(!book)return;
@@ -876,24 +943,30 @@ function renderBracket(){
         if(done&&m.winner&&m.winner!==book)cls+=' loser';
         const pct=tot?Math.round(v[side]/tot*100):0;
         const crown=done&&m.winner===book?' 👑':'';
+        // Show vote count + bar only when round is done; show checkmark if voted during active round
+        const votedTick=isActive&&uv===side?'<span style="font-size:12px;color:var(--amber);margin-left:6px;">✓</span>':'';
         h+=`<div class="${cls}" onclick="voteBook(${ri},${mi},'${side}')">
           <div style="flex:1">
             <div class="mb-title">${book.title}${crown}</div>
             ${book.author?`<div class="mb-author">${book.author}</div>`:''}
-            ${(isActive||done)?`<div style="margin-top:5px;height:2px;background:rgba(200,132,26,.14);border-radius:1px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--amber);border-radius:1px;transition:width .4s"></div></div>`:''}
+            ${done?`<div style="margin-top:5px;height:2px;background:rgba(200,132,26,.14);border-radius:1px;overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--amber);border-radius:1px;transition:width .4s"></div></div>`:''}
           </div>
-          ${(isActive||done)?`<div class="mb-votes">${v[side]}<span style="font-size:10px;color:var(--text-dim);margin-left:2px">v</span></div>`:''}
+          ${done?`<div class="mb-votes">${v[side]}<span style="font-size:10px;color:var(--text-dim);margin-left:2px">v</span></div>`:''}
+          ${!done?votedTick:''}
         </div>`;
       });
       if(!done&&isActive)h+=`<div class="matchup-vs">VS</div>`;
-      if(isActive)h+=`<div class="matchup-timer">${fmtTime(rem)}</div>`;
       h+='</div>';
     });
     h+='</div></div>';
     if(ri<total-1)h+='<div class="connector"><div class="conn-line"></div></div>';
   });
-  h+='</div></div>';disp.innerHTML=h;
+  h+='</div></div>';
+  disp.innerHTML=timerHtml+h;
+
+  if(champion) renderChampion(champion);
 }
+
 function renderChampion(book){
   if(!book){document.getElementById('champion-display').innerHTML='';return;}
   document.getElementById('champion-display').innerHTML=`<div class="bracket-champ"><div class="champ-label">🏆 Champion — Next Club Read</div><div class="champ-title">${book.title}</div>${book.author?`<div class="champ-author">${book.author}</div>`:''}</div>`;
@@ -912,7 +985,15 @@ renderHistory();
 renderScheduler();
 updateNextMeeting();
 renderNotes();
+loadBracket();
 renderBracket();
+// Resume timer if bracket is active and not yet finished
+if(bracket.state){
+  const lastRound=bracket.state.rounds[bracket.state.rounds.length-1];
+  const finished=lastRound&&lastRound[0]&&lastRound[0].winner;
+  if(!finished) startBracketTimer();
+  else renderChampion(lastRound[0].winner);
+}
 </script>
 </body>
 </html>
