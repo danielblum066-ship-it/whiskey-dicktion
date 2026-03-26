@@ -795,14 +795,15 @@ window.applyDateEdits=applyDateEdits;
 function initScheduleSync(){
   dbLive('schedule', data => {
     if(!data) return;
-    if(data.dates && Array.isArray(data.dates)){
+    if(data.dates){
+      const dates=normaliseArray(data.dates);
       SCHED_DATES.length=0;
-      data.dates.forEach(d=>SCHED_DATES.push(d));
+      dates.forEach(d=>SCHED_DATES.push(d));
     }
-    if(data.votes && Array.isArray(data.votes)){
+    if(data.votes){
+      const votes=normaliseArray(data.votes);
       schedVotes.length=0;
-      data.votes.forEach(v=>schedVotes.push(v||0));
-      // Pad if lengths differ
+      votes.forEach(v=>schedVotes.push(v||0));
       while(schedVotes.length<SCHED_DATES.length)schedVotes.push(0);
     }
     if(data.month) schedMonth=data.month;
@@ -888,6 +889,29 @@ function getVoterName(){ return voterName || localStorage.getItem('wd_voter_name
 function setVoterName(n){ voterName=n; localStorage.setItem('wd_voter_name',n); }
 // Sanitise name for use as a Firebase key (no dots, #, $, [, ], /)
 function safeKey(n){ return n.toLowerCase().replace(/[^a-z0-9_-]/g,'_').slice(0,40); }
+
+// Firebase stores JS arrays as objects {0:…,1:…} — convert them back
+function normaliseArray(val){
+  if(!val) return [];
+  if(Array.isArray(val)) return val;
+  // Plain object with numeric keys → array
+  return Object.keys(val).sort((a,b)=>Number(a)-Number(b)).map(k=>val[k]);
+}
+
+function normaliseBracket(data){
+  if(!data) return null;
+  // Rounds
+  data.rounds = normaliseArray(data.rounds).map(round=>{
+    return normaliseArray(round).map(matchup=>{
+      if(!matchup) return {a:null,b:null,winner:null};
+      return matchup;
+    });
+  });
+  // Votes: plain object keyed by matchup string — no array conversion needed
+  if(!data.votes) data.votes={};
+  if(!data.voterChoices) data.voterChoices={};
+  return data;
+}
 
 async function saveBracket(state){
   if(state) await dbSet('bracket', state);
@@ -1038,7 +1062,7 @@ async function submitVotes(){
     const roundKey=`r${ri}`;
 
     // Fetch fresh state to avoid overwriting concurrent votes
-    const fresh=JSON.parse(JSON.stringify(await dbGet('bracket')||bracketState));
+    const fresh=normaliseBracket(JSON.parse(JSON.stringify(await dbGet('bracket')||bracketState)));
     if(!fresh.votes)fresh.votes={};
     if(!fresh.voterChoices)fresh.voterChoices={};
     if(!fresh.voterChoices[vk])fresh.voterChoices[vk]={};
@@ -1133,7 +1157,7 @@ function startBracketTimer(st){
   if(bracketTimer)clearInterval(bracketTimer);
   bracketTimer=setInterval(()=>{
     if(!bracketState)return;
-    if(Date.now()>=bracketState.roundEndTime) advanceRound(JSON.parse(JSON.stringify(bracketState)));
+    if(Date.now()>=bracketState.roundEndTime) advanceRound(normaliseBracket(JSON.parse(JSON.stringify(bracketState))));
     else updateRoundTimer();
   },1000);
 }
@@ -1271,12 +1295,12 @@ function renderChampion(book){
 // Live-sync bracket from Firebase
 function initBracketSync(){
   dbLive('bracket', data=>{
-    bracketState=data;
+    bracketState=normaliseBracket(data);
     renderBracket();
-    if(data){
-      const last=data.rounds[data.rounds.length-1];
+    if(bracketState){
+      const last=bracketState.rounds[bracketState.rounds.length-1];
       const finished=last&&last[0]&&last[0].winner;
-      if(!finished) startBracketTimer(data);
+      if(!finished) startBracketTimer(bracketState);
       else{if(bracketTimer)clearInterval(bracketTimer);bracketTimer=null;}
     } else {
       if(bracketTimer)clearInterval(bracketTimer);bracketTimer=null;
