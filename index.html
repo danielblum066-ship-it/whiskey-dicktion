@@ -633,63 +633,92 @@ function togglePanel(panelId,btnId){
 window.togglePanel = togglePanel;
 
 // ─── HERO BANNER ─────────────────────────────────────────────────────────────
-function applyHeroTagline(){
+async function applyHeroTagline(){
   const val=document.getElementById('hero-tagline-input').value.trim();
   if(!val){showNotif('hero-notif','Please enter tagline text.',true);return;}
-  document.getElementById('hero-tagline').textContent=val;
-  showNotif('hero-notif','Tagline updated.');
+  await dbSet('siteContent/tagline', val);
+  showNotif('hero-notif','Tagline updated for everyone.');
 }
-function applyHeroUrl(){
+async function applyHeroUrl(){
   const url=document.getElementById('hero-url-input').value.trim();
   if(!url){showNotif('hero-notif','Please paste an image URL.',true);return;}
-  setBannerImage(url);
+  await dbSet('siteContent/bannerUrl', url);
+  showNotif('hero-notif','Banner updated for everyone.');
 }
 function handleBannerUpload(input){
   if(!input.files||!input.files[0])return;
   const reader=new FileReader();
-  reader.onload=e=>{
-    document.getElementById('upload-preview').src=e.target.result;
+  reader.onload=async e=>{
+    const src=e.target.result;
+    document.getElementById('upload-preview').src=src;
     document.getElementById('upload-preview').style.display='block';
-    setBannerImage(e.target.result);
+    // Base64 images can be large — store in Firebase and it will sync to all
+    await dbSet('siteContent/bannerUrl', src);
+    showNotif('hero-notif','Banner uploaded and visible to everyone.');
   };
   reader.readAsDataURL(input.files[0]);
 }
-function setBannerImage(src){
+function applyBannerUrl(src){
   const img=document.getElementById('hero-img');
   const ph=document.getElementById('hero-placeholder');
-  img.src=src; img.style.display='block'; ph.style.display='none';
-  showNotif('hero-notif','Banner image updated.');
+  if(src){ img.src=src; img.style.display='block'; ph.style.display='none'; }
+  else { img.style.display='none'; ph.style.display='flex'; }
 }
 window.applyHeroTagline=applyHeroTagline;
 window.applyHeroUrl=applyHeroUrl;
 window.handleBannerUpload=handleBannerUpload;
 
 // ─── CURRENTLY READING ───────────────────────────────────────────────────────
-function saveCurrentBook(){
+async function saveCurrentBook(){
   const title=document.getElementById('edit-title').value.trim();
   const author=document.getElementById('edit-author').value.trim();
   const desc=document.getElementById('edit-desc').value.trim();
   if(!title||!author){showNotif('book-notif','Title and author are required.',true);return;}
-  document.getElementById('cur-title').textContent=title;
-  document.getElementById('cur-author').textContent=author;
-  if(desc)document.getElementById('cur-desc').textContent=desc;
-  showNotif('book-notif','Currently reading updated.');
+  await dbSet('siteContent/currentBook', {title, author, desc});
+  showNotif('book-notif','Currently reading updated for everyone.');
 }
 window.saveCurrentBook=saveCurrentBook;
 
 // ─── NEXT MEETING ────────────────────────────────────────────────────────────
-function saveMeeting(){
+async function saveMeeting(){
   const month=document.getElementById('edit-meet-month').value.trim();
   const date=document.getElementById('edit-meet-date').value.trim();
   const time=document.getElementById('edit-meet-time').value.trim();
   const loc=document.getElementById('edit-meet-loc').value.trim();
-  if(month)document.getElementById('next-month').textContent=month;
-  if(date)document.getElementById('next-date').textContent=date;
-  if(time)document.getElementById('next-time').textContent=time;
-  if(loc)document.getElementById('next-location').textContent='📍 '+loc;
-  showNotif('meeting-notif','Meeting details updated.');
+  await dbSet('siteContent/meeting', {month, date, time, loc});
+  showNotif('meeting-notif','Meeting details updated for everyone.');
 }
 window.saveMeeting=saveMeeting;
+
+// ─── SITE CONTENT LIVE SYNC ──────────────────────────────────────────────────
+// Applies any stored banner, tagline, current book, or meeting details
+// to the page for every visitor as soon as they load
+function initSiteContentSync(){
+  dbLive('siteContent', data=>{
+    if(!data) return;
+
+    if(data.tagline){
+      document.getElementById('hero-tagline').textContent=data.tagline;
+      document.getElementById('hero-tagline-input').value=data.tagline;
+    }
+    if(data.bannerUrl) applyBannerUrl(data.bannerUrl);
+
+    if(data.currentBook){
+      const b=data.currentBook;
+      if(b.title) document.getElementById('cur-title').textContent=b.title;
+      if(b.author) document.getElementById('cur-author').textContent=b.author;
+      if(b.desc) document.getElementById('cur-desc').textContent=b.desc;
+    }
+
+    if(data.meeting){
+      const m=data.meeting;
+      if(m.month) document.getElementById('next-month').textContent=m.month;
+      if(m.date)  document.getElementById('next-date').textContent=m.date;
+      if(m.time)  document.getElementById('next-time').textContent=m.time;
+      if(m.loc)   document.getElementById('next-location').textContent='📍 '+m.loc;
+    }
+  });
+}
 
 // ─── HISTORY ─────────────────────────────────────────────────────────────────
 function renderHistory(){
@@ -1358,6 +1387,7 @@ window.showNotif=showNotif;
 
 // ─── INIT ────────────────────────────────────────────────────────────────────
 renderHistory();
+initSiteContentSync();
 initScheduleSync();
 initNotesSync();
 initBracketSync();
