@@ -1332,17 +1332,7 @@ function renderChampion(book){
 // Live-sync bracket from Firebase
 function initBracketSync(){
   dbLive('bracket', data=>{
-    // ── DEBUG: log raw Firebase data ──────────────────────────────────────────
-    console.log('=== RAW FIREBASE DATA ===');
-    console.log(JSON.stringify(data, null, 2));
-    const norm=normaliseBracket(data);
-    console.log('=== AFTER NORMALISE ===');
-    if(norm){
-      console.log('rounds.length:', norm.rounds.length);
-      norm.rounds.forEach((r,i)=>console.log(`round[${i}] length:`, r.length, JSON.stringify(r)));
-    }
-    // ── END DEBUG ─────────────────────────────────────────────────────────────
-    bracketState=norm;
+    bracketState=normaliseBracket(data);
     renderBracket();
     if(bracketState){
       const last=bracketState.rounds[bracketState.rounds.length-1];
