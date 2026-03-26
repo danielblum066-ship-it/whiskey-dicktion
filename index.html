@@ -245,6 +245,18 @@ nav{position:sticky;top:0;z-index:200;background:rgba(16,10,6,0.94);backdrop-fil
 /* SELECTED matchup choice (pending, not yet submitted) */
 .matchup-book.selected{background:rgba(200,132,26,.22);border-left:3px solid var(--amber);}
 
+/* VOTER NAME MODAL */
+.voter-modal-backdrop{position:fixed;inset:0;background:rgba(10,6,4,.75);z-index:500;backdrop-filter:blur(3px);}
+.voter-modal-box{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:501;
+  background:#1E160E;border:1px solid rgba(200,132,26,.45);border-radius:10px;
+  padding:28px 32px;width:min(420px,90vw);box-shadow:0 20px 60px rgba(0,0,0,.7);}
+.voter-modal-title{font-family:'Playfair Display',serif;font-size:20px;color:var(--amber-light);margin-bottom:8px;}
+.voter-modal-sub{font-size:14px;color:var(--text-dim);line-height:1.65;font-style:italic;}
+.voter-name-input{background:rgba(16,10,6,.7);border:1px solid rgba(200,132,26,.3);color:var(--text);
+  font-family:'Crimson Pro',serif;font-size:16px;padding:10px 14px;border-radius:5px;
+  width:100%;outline:none;margin-top:16px;transition:border-color .2s;}
+.voter-name-input:focus{border-color:var(--amber);}
+
 /* DATE EDIT LIST */
 .date-edit-row{display:flex;gap:8px;margin-bottom:6px;align-items:center;}
 .date-edit-row input{background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.22);
@@ -868,8 +880,14 @@ function initNotesSync(){
 // ─── BRACKET — Firebase-backed ───────────────────────────────────────────────
 let bracketState=null;
 let bracketTimer=null;
-let pendingVotes={};
-let submittedKeys=new Set();
+let pendingVotes={};   // matchup key -> side chosen, not yet submitted
+let voterName=null;    // set once per session via name prompt
+
+// Voter identity — persisted in localStorage so refreshing keeps your name
+function getVoterName(){ return voterName || localStorage.getItem('wd_voter_name') || null; }
+function setVoterName(n){ voterName=n; localStorage.setItem('wd_voter_name',n); }
+// Sanitise name for use as a Firebase key (no dots, #, $, [, ], /)
+function safeKey(n){ return n.toLowerCase().replace(/[^a-z0-9_-]/g,'_').slice(0,40); }
 
 async function saveBracket(state){
   if(state) await dbSet('bracket', state);
@@ -935,8 +953,10 @@ async function launchBracket(){
     for(let i=0;i<c;i++)m.push({a:null,b:null,winner:null});
     rounds.push(m);
   }
-  const state={rounds,currentRound:0,roundDuration:duration,roundEndTime:Date.now()+duration,votes:{}};
-  pendingVotes={};submittedKeys=new Set();
+  // votes: {matchupKey: {a:N, b:N}}
+  // voterChoices: {safeVoterName: {roundKey: {matchupKey: side}}}
+  const state={rounds,currentRound:0,roundDuration:duration,roundEndTime:Date.now()+duration,votes:{},voterChoices:{}};
+  pendingVotes={};
   await saveBracket(state);
   document.getElementById('admin-panel').classList.remove('open');
   document.getElementById('admin-toggle-btn').textContent='▶ Configure & launch a new bracket';
@@ -946,46 +966,132 @@ window.launchBracket=launchBracket;
 
 async function resetBracket(){
   if(!confirm('Reset the bracket? All votes will be lost.'))return;
-  pendingVotes={};submittedKeys=new Set();
+  pendingVotes={};
   if(bracketTimer)clearInterval(bracketTimer);bracketTimer=null;
   await saveBracket(null);
 }
 window.resetBracket=resetBracket;
 
-// Voting — select then submit
+// ── Voter name prompt ─────────────────────────────────────────────────────────
+function showVoterNamePrompt(onConfirm){
+  const existing=getVoterName();
+  // If name already known, skip prompt
+  if(existing){ onConfirm(existing); return; }
+  // Build modal
+  const modal=document.createElement('div');
+  modal.id='voter-modal';
+  modal.innerHTML=`
+    <div class="voter-modal-backdrop" onclick="document.getElementById('voter-modal').remove()"></div>
+    <div class="voter-modal-box">
+      <div class="voter-modal-title">Who's voting?</div>
+      <p class="voter-modal-sub">Enter your name so your picks are saved against your vote. You can change your choices and resubmit any time before the round closes.</p>
+      <input type="text" id="voter-name-input" class="voter-name-input" placeholder="Your name…" autocomplete="off">
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+        <button class="btn btn-outline btn-sm" onclick="document.getElementById('voter-modal').remove()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="confirmVoterName()">Continue</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  setTimeout(()=>document.getElementById('voter-name-input')&&document.getElementById('voter-name-input').focus(),50);
+  // Store callback for confirm button
+  window._voterNameCb=onConfirm;
+  // Allow Enter key
+  document.getElementById('voter-name-input').addEventListener('keydown',e=>{
+    if(e.key==='Enter') confirmVoterName();
+  });
+}
+function confirmVoterName(){
+  const val=document.getElementById('voter-name-input')&&document.getElementById('voter-name-input').value.trim();
+  if(!val){
+    const inp=document.getElementById('voter-name-input');
+    if(inp){inp.style.borderColor='#E08050';inp.placeholder='Please enter your name';}
+    return;
+  }
+  setVoterName(val);
+  document.getElementById('voter-modal')&&document.getElementById('voter-modal').remove();
+  if(window._voterNameCb){ window._voterNameCb(val); window._voterNameCb=null; }
+}
+window.confirmVoterName=confirmVoterName;
+
+// ── Voting — select then submit ───────────────────────────────────────────────
 function selectChoice(ri,mi,side){
   if(!bracketState)return;
   const key=`${ri}-${mi}`;
-  if(submittedKeys.has(key)||bracketState.currentRound!==ri)return;
-  pendingVotes[key]=pendingVotes[key]===side?undefined:side;
-  if(pendingVotes[key]===undefined)delete pendingVotes[key];
+  if(bracketState.currentRound!==ri)return;
+  // If already submitted this round, allow changing (will be a resubmit)
+  if(pendingVotes[key]===side) delete pendingVotes[key];
+  else pendingVotes[key]=side;
   renderBracket();
 }
 window.selectChoice=selectChoice;
 
 async function submitVotes(){
   if(!bracketState)return;
-  const ri=bracketState.currentRound;
-  const fresh=JSON.parse(JSON.stringify(bracketState));
-  let count=0;
-  Object.entries(pendingVotes).forEach(([key,side])=>{
-    if(!side)return;
-    const[kri]=key.split('-').map(Number);
-    if(kri!==ri||submittedKeys.has(key))return;
-    if(!fresh.votes[key])fresh.votes[key]={a:0,b:0};
-    fresh.votes[key][side]++;
-    submittedKeys.add(key);
-    count++;
-  });
-  pendingVotes={};
-  if(count>0){
+  showVoterNamePrompt(async(name)=>{
+    const vk=safeKey(name);
+    const ri=bracketState.currentRound;
+    const roundKey=`r${ri}`;
+
+    // Fetch fresh state to avoid overwriting concurrent votes
+    const fresh=JSON.parse(JSON.stringify(await dbGet('bracket')||bracketState));
+    if(!fresh.votes)fresh.votes={};
+    if(!fresh.voterChoices)fresh.voterChoices={};
+    if(!fresh.voterChoices[vk])fresh.voterChoices[vk]={};
+
+    const prevRoundChoices=fresh.voterChoices[vk][roundKey]||{};
+    let changed=0;
+
+    // For each pending vote, undo previous choice and apply new one
+    Object.entries(pendingVotes).forEach(([key,newSide])=>{
+      const[kri]=key.split('-').map(Number);
+      if(kri!==ri)return;
+      if(!fresh.votes[key])fresh.votes[key]={a:0,b:0};
+      const prevSide=prevRoundChoices[key];
+      // Subtract previous vote if it existed
+      if(prevSide&&prevSide!==newSide){
+        fresh.votes[key][prevSide]=Math.max(0,(fresh.votes[key][prevSide]||0)-1);
+      }
+      // Add new vote only if it's different from previous
+      if(prevSide!==newSide){
+        fresh.votes[key][newSide]=(fresh.votes[key][newSide]||0)+1;
+        changed++;
+      }
+      // Record new choice
+      prevRoundChoices[key]=newSide;
+    });
+
+    fresh.voterChoices[vk][roundKey]=prevRoundChoices;
+    pendingVotes={};
+
     await saveBracket(fresh);
-    showNotif('vote-submit-notif',`${count} vote${count>1?'s':''} submitted. Results revealed when the round closes.`);
-  } else {
-    showNotif('vote-submit-notif','No new selections to submit.',true);
-  }
+
+    // Show confirmation modal
+    const isUpdate=Object.keys(prevRoundChoices).length>0&&changed===0;
+    showVoteConfirmation(name, changed, isUpdate);
+    renderBracket();
+  });
 }
 window.submitVotes=submitVotes;
+
+function showVoteConfirmation(name, changed, isUpdate){
+  const modal=document.createElement('div');
+  modal.id='vote-confirm-modal';
+  const msg=changed===0
+    ? `Your votes were already up to date, ${name}.`
+    : isUpdate
+      ? `Your picks have been updated, ${name}.`
+      : `${changed} vote${changed!==1?'s':''} submitted, ${name}. Results are revealed when the round closes.`;
+  modal.innerHTML=`
+    <div class="voter-modal-backdrop" onclick="document.getElementById('vote-confirm-modal').remove()"></div>
+    <div class="voter-modal-box" style="text-align:center;">
+      <div style="font-size:32px;margin-bottom:12px;">🥃</div>
+      <div class="voter-modal-title">Votes recorded</div>
+      <p class="voter-modal-sub" style="margin-top:8px;">${msg}</p>
+      <p class="voter-modal-sub" style="margin-top:4px;font-size:13px;">You can change your picks and resubmit any time before the round closes.</p>
+      <button class="btn btn-primary btn-sm" style="margin-top:18px;" onclick="document.getElementById('vote-confirm-modal').remove()">Got it</button>
+    </div>`;
+  document.body.appendChild(modal);
+}
 
 async function advanceRound(st){
   const round=st.rounds[st.currentRound];
@@ -1063,18 +1169,24 @@ function renderBracket(){
 
   const ri=st.currentRound;
   const activeMatchups=!champion&&st.rounds[ri]?st.rounds[ri].filter(m=>m.a&&m.b&&!m.winner).length:0;
+
+  // Determine this visitor's prior submissions from Firebase
+  const vk=getVoterName()?safeKey(getVoterName()):null;
+  const myChoices=(vk&&st.voterChoices&&st.voterChoices[vk]&&st.voterChoices[vk][`r${ri}`])||{};
+  const hasAnySubmission=Object.keys(myChoices).length>0;
+
   const pendingCount=Object.keys(pendingVotes).filter(k=>k.startsWith(ri+'-')&&pendingVotes[k]).length;
-  const allSubmitted=activeMatchups>0&&st.rounds[ri].filter(m=>m.a&&m.b&&!m.winner).every((_,mi)=>submittedKeys.has(`${ri}-${mi}`));
 
   let submitHtml='';
   if(!champion&&activeMatchups>0){
+    const statusMsg=hasAnySubmission&&pendingCount===0
+      ?'<span style="color:var(--amber);">✓ Your votes are in. You can still change and resubmit.</span>'
+      :`Select your picks below — <span style="color:var(--cream);">${pendingCount} pending</span>`;
     submitHtml=`<div class="submit-votes-bar">
-      <div style="font-size:14px;color:var(--text-dim);">
-        ${allSubmitted
-          ?'<span style="color:var(--amber);">✓ Your votes are in for this round.</span>'
-          :`Select your picks, then submit — <span style="color:var(--cream);">${pendingCount} selection${pendingCount!==1?'s':''} pending</span>`}
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="submitVotes()" ${pendingCount===0?'disabled style="opacity:.45;cursor:not-allowed"':''}>Submit Votes</button>
+      <div style="font-size:14px;color:var(--text-dim);">${statusMsg}</div>
+      <button class="btn btn-primary btn-sm" onclick="submitVotes()" ${pendingCount===0?'disabled style="opacity:.45;cursor:not-allowed"':''}>
+        ${hasAnySubmission?'Update Votes':'Submit Votes'}
+      </button>
     </div>
     <div id="vote-submit-notif" class="notif" style="margin-bottom:12px;"></div>`;
   }
@@ -1091,7 +1203,9 @@ function renderBracket(){
       const v=(st.votes&&st.votes[key])||{a:0,b:0};
       const tot=v.a+v.b;
       const done=isPast||!!m.winner;
-      const submitted=submittedKeys.has(key);
+      // For active round, check if this voter has already submitted a choice
+      const myRoundChoices=(vk&&st.voterChoices&&st.voterChoices[vk]&&st.voterChoices[vk][`r${rri}`])||{};
+      const submittedSide=myRoundChoices[key]||null;
       const pending=pendingVotes[key];
       h+=`<div class="matchup${isActive?' active-round':''}">`;
       ['a','b'].forEach(side=>{
@@ -1102,8 +1216,9 @@ function renderBracket(){
         if(done&&m.winner&&m.winner.title===book.title)cls+=' winner';
         else if(done&&m.winner&&m.winner.title!==book.title)cls+=' loser';
         else if(!done&&pending===side)cls+=' selected';
-        else if(!done&&submitted)cls+=' voted-for';
-        const clickable=isActive&&!done&&!submitted;
+        else if(!done&&submittedSide===side)cls+=' voted-for';
+        // Clickable if active, not done — always allow changing mind
+        const clickable=isActive&&!done;
         h+=`<div class="${cls}"${clickable?` onclick="selectChoice(${rri},${mi},'${side}')" style="cursor:pointer;"`:''}>
           <div style="flex:1">
             <div class="mb-title">${book.title}${crown}</div>
@@ -1112,9 +1227,10 @@ function renderBracket(){
           </div>
           ${done?`<div class="mb-votes">${v[side]}<span style="font-size:10px;color:var(--text-dim);margin-left:2px">v</span></div>`:''}
           ${(!done&&pending===side)?`<span style="font-size:13px;color:var(--amber-light);margin-left:6px;">●</span>`:''}
+          ${(!done&&submittedSide===side&&!pending)?`<span style="font-size:12px;color:var(--amber);margin-left:6px;">✓</span>`:''}
         </div>`;
       });
-      if(!done&&isActive&&!submitted)h+=`<div class="matchup-vs">VS</div>`;
+      if(!done&&isActive)h+=`<div class="matchup-vs">VS</div>`;
       h+='</div>';
     });
     h+='</div></div>';
