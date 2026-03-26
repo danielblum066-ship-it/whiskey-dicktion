@@ -975,43 +975,48 @@ window.resetBracket=resetBracket;
 // ── Voter name prompt ─────────────────────────────────────────────────────────
 function showVoterNamePrompt(onConfirm){
   const existing=getVoterName();
-  // If name already known, skip prompt
   if(existing){ onConfirm(existing); return; }
-  // Build modal
+
   const modal=document.createElement('div');
   modal.id='voter-modal';
-  modal.innerHTML=`
-    <div class="voter-modal-backdrop" onclick="document.getElementById('voter-modal').remove()"></div>
-    <div class="voter-modal-box">
-      <div class="voter-modal-title">Who's voting?</div>
-      <p class="voter-modal-sub">Enter your name so your picks are saved against your vote. You can change your choices and resubmit any time before the round closes.</p>
-      <input type="text" id="voter-name-input" class="voter-name-input" placeholder="Your name…" autocomplete="off">
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
-        <button class="btn btn-outline btn-sm" onclick="document.getElementById('voter-modal').remove()">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="confirmVoterName()">Continue</button>
-      </div>
+
+  const backdrop=document.createElement('div');
+  backdrop.className='voter-modal-backdrop';
+
+  const box=document.createElement('div');
+  box.className='voter-modal-box';
+  box.innerHTML=`
+    <div class="voter-modal-title">Who's voting?</div>
+    <p class="voter-modal-sub">Enter your name so your picks are saved. You can change your choices and resubmit any time before the round closes.</p>
+    <input type="text" id="voter-name-input" class="voter-name-input" placeholder="Your name…" autocomplete="off">
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+      <button class="btn btn-outline btn-sm" id="voter-cancel-btn">Cancel</button>
+      <button class="btn btn-primary btn-sm" id="voter-confirm-btn">Continue</button>
     </div>`;
+
+  modal.appendChild(backdrop);
+  modal.appendChild(box);
   document.body.appendChild(modal);
-  setTimeout(()=>document.getElementById('voter-name-input')&&document.getElementById('voter-name-input').focus(),50);
-  // Store callback for confirm button
-  window._voterNameCb=onConfirm;
-  // Allow Enter key
-  document.getElementById('voter-name-input').addEventListener('keydown',e=>{
-    if(e.key==='Enter') confirmVoterName();
-  });
+
+  const inp=box.querySelector('#voter-name-input');
+  const confirmBtn=box.querySelector('#voter-confirm-btn');
+  const cancelBtn=box.querySelector('#voter-cancel-btn');
+
+  const dismiss=()=>modal.remove();
+  const confirm=()=>{
+    const val=inp.value.trim();
+    if(!val){ inp.style.borderColor='#E08050'; inp.focus(); return; }
+    setVoterName(val);
+    modal.remove();
+    onConfirm(val);
+  };
+
+  backdrop.addEventListener('click', dismiss);
+  cancelBtn.addEventListener('click', dismiss);
+  confirmBtn.addEventListener('click', confirm);
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter') confirm(); });
+  setTimeout(()=>inp.focus(), 50);
 }
-function confirmVoterName(){
-  const val=document.getElementById('voter-name-input')&&document.getElementById('voter-name-input').value.trim();
-  if(!val){
-    const inp=document.getElementById('voter-name-input');
-    if(inp){inp.style.borderColor='#E08050';inp.placeholder='Please enter your name';}
-    return;
-  }
-  setVoterName(val);
-  document.getElementById('voter-modal')&&document.getElementById('voter-modal').remove();
-  if(window._voterNameCb){ window._voterNameCb(val); window._voterNameCb=null; }
-}
-window.confirmVoterName=confirmVoterName;
 
 // ── Voting — select then submit ───────────────────────────────────────────────
 function selectChoice(ri,mi,side){
@@ -1076,21 +1081,31 @@ window.submitVotes=submitVotes;
 function showVoteConfirmation(name, changed, isUpdate){
   const modal=document.createElement('div');
   modal.id='vote-confirm-modal';
+
   const msg=changed===0
-    ? `Your votes were already up to date, ${name}.`
-    : isUpdate
-      ? `Your picks have been updated, ${name}.`
-      : `${changed} vote${changed!==1?'s':''} submitted, ${name}. Results are revealed when the round closes.`;
-  modal.innerHTML=`
-    <div class="voter-modal-backdrop" onclick="document.getElementById('vote-confirm-modal').remove()"></div>
-    <div class="voter-modal-box" style="text-align:center;">
-      <div style="font-size:32px;margin-bottom:12px;">🥃</div>
-      <div class="voter-modal-title">Votes recorded</div>
-      <p class="voter-modal-sub" style="margin-top:8px;">${msg}</p>
-      <p class="voter-modal-sub" style="margin-top:4px;font-size:13px;">You can change your picks and resubmit any time before the round closes.</p>
-      <button class="btn btn-primary btn-sm" style="margin-top:18px;" onclick="document.getElementById('vote-confirm-modal').remove()">Got it</button>
-    </div>`;
+    ?`Your picks are already up to date, ${name}.`
+    :`${changed} vote${changed!==1?'s':''} ${isUpdate?'updated':'submitted'}, ${name}. Results are revealed when the round closes.`;
+
+  const backdrop=document.createElement('div');
+  backdrop.className='voter-modal-backdrop';
+
+  const box=document.createElement('div');
+  box.className='voter-modal-box';
+  box.style.textAlign='center';
+  box.innerHTML=`
+    <div style="font-size:32px;margin-bottom:12px;">🥃</div>
+    <div class="voter-modal-title">Votes recorded</div>
+    <p class="voter-modal-sub" style="margin-top:8px;">${msg}</p>
+    <p class="voter-modal-sub" style="margin-top:4px;font-size:13px;">You can change your picks and resubmit any time before the round closes.</p>
+    <button class="btn btn-primary btn-sm" id="vote-confirm-ok" style="margin-top:18px;">Got it</button>`;
+
+  modal.appendChild(backdrop);
+  modal.appendChild(box);
   document.body.appendChild(modal);
+
+  const dismiss=()=>modal.remove();
+  backdrop.addEventListener('click', dismiss);
+  box.querySelector('#vote-confirm-ok').addEventListener('click', dismiss);
 }
 
 async function advanceRound(st){
