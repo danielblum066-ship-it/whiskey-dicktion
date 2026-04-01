@@ -211,6 +211,8 @@ body.admin-mode .admin-toggle{display:inline-flex;}
   font-size:10px;color:var(--text-dim);background:var(--char);
   padding:1px 5px;border-radius:3px;border:1px solid var(--border);letter-spacing:.06em;pointer-events:none;}
 .matchup-bye{padding:10px 12px;font-size:13px;color:var(--text-dim);font-style:italic;text-align:center;}
+.matchup-vote-count{font-size:11px;color:var(--text-dim);padding:4px 10px;text-align:center;
+  background:rgba(16,10,6,.3);border-top:1px solid rgba(200,132,26,.08);letter-spacing:.04em;}
 .matchup-timer{font-size:11px;color:var(--smoke);padding:4px 10px;text-align:right;
   background:rgba(16,10,6,.3);border-top:1px solid rgba(200,132,26,.1);}
 .matchup-timer.urgent{color:#E08050;}
@@ -364,7 +366,11 @@ body.admin-mode .admin-toggle{display:inline-flex;}
           <button class="edit-btn" id="book-edit-btn" onclick="togglePanel('book-edit','book-edit-btn')">✏ Edit</button>
         </div>
         <div class="book-grid">
-          <div class="book-spine">📖</div>
+          <div class="book-spine" id="book-spine-wrap">
+            <img id="book-cover-img" src="" alt="Cover"
+              style="display:none;width:100%;height:100%;object-fit:cover;border-radius:3px;">
+            <span id="book-cover-emoji" style="font-size:26px;">📖</span>
+          </div>
           <div>
             <div class="book-title" id="cur-title">Six of Crows</div>
             <div class="book-author" id="cur-author">Leigh Bardugo</div>
@@ -379,6 +385,16 @@ body.admin-mode .admin-toggle{display:inline-flex;}
           </div>
           <div class="fld"><label>Short description</label>
             <textarea id="edit-desc" rows="2" style="background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.22);color:var(--text);font-family:'Crimson Pro',serif;font-size:15px;padding:9px 13px;border-radius:4px;width:100%;outline:none;resize:vertical;transition:border-color .2s;" placeholder="One sentence about the book…"></textarea>
+          </div>
+          <div class="fld">
+            <label>Cover image <span style="font-size:11px;color:var(--text-dim);text-transform:none;letter-spacing:0;">— paste a URL or upload a file</span></label>
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+              <input type="text" id="edit-cover-url" placeholder="https://…" style="flex:1;min-width:160px;">
+              <label style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--amber-light);border:1px solid var(--border-hi);padding:6px 12px;border-radius:4px;cursor:pointer;white-space:nowrap;margin-bottom:0;">
+                📁 Upload
+                <input type="file" accept="image/*" onchange="handleCoverUpload(this)" style="display:none;">
+              </label>
+            </div>
           </div>
           <button class="btn btn-primary btn-sm" onclick="saveCurrentBook()">Save</button>
           <div id="book-notif" class="notif"></div>
@@ -717,6 +733,9 @@ function togglePanel(panelId,btnId){
       document.getElementById('edit-title').value=document.getElementById('cur-title').textContent;
       document.getElementById('edit-author').value=document.getElementById('cur-author').textContent;
       document.getElementById('edit-desc').value=document.getElementById('cur-desc').textContent;
+      const coverSrc=document.getElementById('book-cover-img').src;
+      document.getElementById('edit-cover-url').value=(coverSrc&&!coverSrc.endsWith(location.href))?coverSrc:'';
+      window._pendingCoverSrc=null;
     }
     if(panelId==='meeting-edit'){
       document.getElementById('edit-meet-month').value=document.getElementById('next-month').textContent;
@@ -772,13 +791,42 @@ window.applyHeroUrl=applyHeroUrl;
 window.handleBannerUpload=handleBannerUpload;
 
 // ─── CURRENTLY READING ───────────────────────────────────────────────────────
+function applyBookCover(src){
+  const img=document.getElementById('book-cover-img');
+  const emoji=document.getElementById('book-cover-emoji');
+  if(src){
+    img.src=src; img.style.display='block'; emoji.style.display='none';
+  } else {
+    img.style.display='none'; emoji.style.display='';
+  }
+}
+
+function handleCoverUpload(input){
+  if(!adminUnlocked) return;
+  if(!input.files||!input.files[0]) return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    document.getElementById('edit-cover-url').value='uploaded';
+    applyBookCover(e.target.result);
+    // Store base64 in a temporary variable for saveCurrentBook to pick up
+    window._pendingCoverSrc=e.target.result;
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+window.handleCoverUpload=handleCoverUpload;
+
 async function saveCurrentBook(){
   if(!adminUnlocked) return;
   const title=document.getElementById('edit-title').value.trim();
   const author=document.getElementById('edit-author').value.trim();
   const desc=document.getElementById('edit-desc').value.trim();
   if(!title||!author){showNotif('book-notif','Title and author are required.',true);return;}
-  await dbSet('siteContent/currentBook', {title, author, desc});
+  // Cover: use uploaded base64 if present, otherwise the URL field
+  const urlField=document.getElementById('edit-cover-url').value.trim();
+  const cover=window._pendingCoverSrc||(urlField!=='uploaded'?urlField:'')||'';
+  window._pendingCoverSrc=null;
+  await dbSet('siteContent/currentBook', {title, author, desc, cover});
+  applyBookCover(cover||null);
   showNotif('book-notif','Currently reading updated for everyone.');
 }
 window.saveCurrentBook=saveCurrentBook;
@@ -813,6 +861,7 @@ function initSiteContentSync(){
       if(b.title) document.getElementById('cur-title').textContent=b.title;
       if(b.author) document.getElementById('cur-author').textContent=b.author;
       if(b.desc) document.getElementById('cur-desc').textContent=b.desc;
+      applyBookCover(b.cover||null);
     }
 
     if(data.meeting){
@@ -1302,7 +1351,12 @@ function showVoteConfirmation(name, changed, isUpdate){
   box.querySelector('#vote-confirm-ok').addEventListener('click', dismiss);
 }
 
+let advancingRound=false; // mutex — prevents double-fire on timer tick
+
 async function advanceRound(st){
+  if(advancingRound) return;  // already in progress, skip
+  advancingRound=true;
+
   const round=st.rounds[st.currentRound];
   round.forEach((m,mi)=>{
     if(m.winner||!m.a||!m.b)return;
@@ -1320,21 +1374,28 @@ async function advanceRound(st){
 
   // Re-encode nulls as sentinels before writing back to Firebase
   const encoded=encodeForFirebase(st);
-
   const isLast=st.currentRound===st.rounds.length-1;
   if(!isLast){
     encoded.currentRound=st.currentRound+1;
     encoded.roundEndTime=Date.now()+st.roundDuration;
   }
   await saveBracket(encoded);
+  // Flag stays true until the Firebase live listener fires and updates
+  // bracketState — at that point roundEndTime will be in the future again
+  // and the timer will stop calling advanceRound
 }
 
 function startBracketTimer(st){
   if(bracketTimer)clearInterval(bracketTimer);
   bracketTimer=setInterval(()=>{
     if(!bracketState)return;
-    if(Date.now()>=bracketState.roundEndTime) advanceRound(normaliseBracket(JSON.parse(JSON.stringify(bracketState))));
-    else updateRoundTimer();
+    if(Date.now()>=bracketState.roundEndTime){
+      // Only call advanceRound if not already in progress
+      if(!advancingRound) advanceRound(normaliseBracket(JSON.parse(JSON.stringify(bracketState))));
+    } else {
+      advancingRound=false; // reset mutex once a new round is live
+      updateRoundTimer();
+    }
   },1000);
 }
 
@@ -1446,13 +1507,23 @@ function renderBracket(){
         </div>`;
       });
       if(!done&&isActive)h+=`<div class="matchup-vs">VS</div>`;
+      if(isActive&&!done) h+=`<div class="matchup-vote-count">${tot} vote${tot!==1?'s':''} cast</div>`;
       h+='</div>';
     });
     h+='</div></div>';
     if(rri<total-1)h+='<div class="connector"><div class="conn-line"></div></div>';
   });
   h+='</div></div>';
+
+  // Preserve the horizontal scroll position of the bracket so clicking
+  // a matchup choice doesn't snap the view back to the left
+  const existingWrap=disp.querySelector('.bracket-wrap');
+  const savedScroll=existingWrap?existingWrap.scrollLeft:0;
+
   disp.innerHTML=timerHtml+submitHtml+h;
+
+  const newWrap=disp.querySelector('.bracket-wrap');
+  if(newWrap&&savedScroll) newWrap.scrollLeft=savedScroll;
 
   if(champion)renderChampion(champion);
   else document.getElementById('champion-display').innerHTML='';
@@ -1472,14 +1543,19 @@ function renderChampion(book){
 function initBracketSync(){
   dbLive('bracket', data=>{
     bracketState=normaliseBracket(data);
+    // If Firebase just sent back a state with a future roundEndTime,
+    // the advance completed successfully — release the mutex
+    if(bracketState && bracketState.roundEndTime > Date.now()){
+      advancingRound=false;
+    }
     renderBracket();
     if(bracketState){
       const last=bracketState.rounds[bracketState.rounds.length-1];
       const finished=last&&last[0]&&last[0].winner;
       if(!finished) startBracketTimer(bracketState);
-      else{if(bracketTimer)clearInterval(bracketTimer);bracketTimer=null;}
+      else{if(bracketTimer)clearInterval(bracketTimer);bracketTimer=null;advancingRound=false;}
     } else {
-      if(bracketTimer)clearInterval(bracketTimer);bracketTimer=null;
+      if(bracketTimer)clearInterval(bracketTimer);bracketTimer=null;advancingRound=false;
     }
   });
 }
