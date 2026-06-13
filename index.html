@@ -303,8 +303,9 @@ body.admin-mode .admin-toggle{display:inline-flex;}
 .doodle-row:nth-child(even) .doodle-cell-inner.unavail{background:rgba(16,10,6,.2);}
 .doodle-delete-btn{background:none;border:none;color:var(--text-dim);cursor:pointer;
   font-size:11px;padding:1px 5px;border-radius:3px;transition:color .15s;
-  align-items:center;justify-content:center;flex-shrink:0;}
+  align-items:center;justify-content:center;flex-shrink:0;display:none;}
 .doodle-delete-btn:hover{color:#E08050;}
+body.admin-mode .doodle-delete-btn{display:flex;}
 
 /* DATE EDIT LIST */
 .date-edit-row{display:flex;gap:8px;margin-bottom:6px;align-items:center;}
@@ -975,7 +976,7 @@ function renderDoodle(){
       <td class="doodle-name-col">
         <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
           <span>${name}</span>
-          <button class="doodle-delete-btn" style="display:${adminUnlocked?'flex':'none'};"
+          <button class="doodle-delete-btn"
             onclick="deleteSchedResponse('${safeN}','${name.replace(/'/g,"\\'")}')">✕</button>
         </div>
       </td>`;
