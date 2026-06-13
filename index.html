@@ -301,6 +301,10 @@ body.admin-mode .admin-toggle{display:inline-flex;}
 .doodle-count-label{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-top:3px;}
 .doodle-row:nth-child(even) .doodle-cell-inner.avail{background:rgba(200,132,26,.13);}
 .doodle-row:nth-child(even) .doodle-cell-inner.unavail{background:rgba(16,10,6,.2);}
+.doodle-delete-btn{background:none;border:none;color:var(--text-dim);cursor:pointer;
+  font-size:11px;padding:1px 5px;border-radius:3px;transition:color .15s;
+  align-items:center;justify-content:center;flex-shrink:0;}
+.doodle-delete-btn:hover{color:#E08050;}
 
 /* DATE EDIT LIST */
 .date-edit-row{display:flex;gap:8px;margin-bottom:6px;align-items:center;}
@@ -966,8 +970,15 @@ function renderDoodle(){
   // ── Existing response rows ─────────────────────────────────────────────────
   names.forEach((name,ri)=>{
     const resp = schedResponses[name] || [];
+    const safeN = name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,40);
     html += `<tr class="doodle-row">
-      <td class="doodle-name-col">${name}</td>`;
+      <td class="doodle-name-col">
+        <div style="display:flex;align-items:center;justify-content:flex-end;gap:6px;">
+          <span>${name}</span>
+          <button class="doodle-delete-btn" style="display:${adminUnlocked?'flex':'none'};"
+            onclick="deleteSchedResponse('${safeN}','${name.replace(/'/g,"\\'")}')">✕</button>
+        </div>
+      </td>`;
     SCHED_DATES.forEach((_,i)=>{
       const yes = !!resp[i];
       html += `<td class="doodle-cell">
@@ -1056,6 +1067,16 @@ async function submitRsvp(){
   await dbSet(`schedule/responses/${safeN}`, {name, avail: schedResponses[name]});
 }
 window.submitRsvp = submitRsvp;
+
+async function deleteSchedResponse(safeN, name){
+  if(!adminUnlocked) return;
+  if(!confirm(`Remove ${name}'s availability response?`)) return;
+  delete schedResponses[name];
+  renderDoodle();
+  updateNextMeetingDisplay();
+  await dbDel(`schedule/responses/${safeN}`);
+}
+window.deleteSchedResponse = deleteSchedResponse;
 
 // Date editor — now uses a calendar picker
 function buildDateEditList(){
