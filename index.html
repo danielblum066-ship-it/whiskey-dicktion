@@ -273,6 +273,35 @@ body.admin-mode .admin-toggle{display:inline-flex;}
   width:100%;outline:none;margin-top:16px;transition:border-color .2s;}
 .voter-name-input:focus{border-color:var(--amber);}
 
+/* DOODLE GRID */
+.doodle-table{border-collapse:collapse;min-width:100%;font-size:14px;}
+.doodle-table th,.doodle-table td{padding:0;border:none;}
+.doodle-date-header{text-align:center;padding:8px 6px 10px;min-width:72px;vertical-align:bottom;}
+.doodle-date-header .ddh-month{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;}
+.doodle-date-header .ddh-day{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;}
+.doodle-date-header .ddh-num{font-family:'Playfair Display',serif;font-size:22px;color:var(--cream);line-height:1;}
+.doodle-date-header.best-date .ddh-num{color:var(--amber-light);}
+.doodle-date-header.best-date .ddh-day,.doodle-date-header.best-date .ddh-month{color:var(--amber);}
+.doodle-name-col{padding:0 14px 0 2px;white-space:nowrap;font-size:14px;color:var(--cream);
+  vertical-align:middle;text-align:right;font-family:'Playfair Display',serif;}
+.doodle-name-col.pending{color:var(--text-dim);font-style:italic;font-family:'Crimson Pro',serif;font-size:13px;}
+.doodle-cell{text-align:center;vertical-align:middle;padding:4px 3px;}
+.doodle-cell-inner{width:42px;height:36px;margin:0 auto;border-radius:5px;
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+  cursor:pointer;transition:all .15s;border:1px solid transparent;}
+.doodle-cell-inner.avail{background:rgba(200,132,26,.18);border-color:rgba(200,132,26,.35);color:var(--amber-light);}
+.doodle-cell-inner.unavail{background:rgba(42,32,24,.4);border-color:rgba(200,132,26,.08);color:var(--text-dim);}
+.doodle-cell-inner.pending-sel{background:rgba(200,132,26,.32);border-color:var(--amber);color:var(--cream);}
+.doodle-cell-inner.pending-unsel{background:rgba(42,32,24,.3);border-color:rgba(200,132,26,.12);color:var(--text-dim);}
+.doodle-cell-inner:hover{border-color:var(--amber);transform:scale(1.08);}
+.doodle-sep td{height:1px;background:rgba(200,132,26,.15);padding:0;}
+.doodle-count-row td{padding:8px 3px 4px;text-align:center;vertical-align:top;}
+.doodle-count-box{font-family:'Playfair Display',serif;font-size:18px;color:var(--text-dim);line-height:1;}
+.doodle-count-box.best{color:var(--amber-light);}
+.doodle-count-label{font-size:10px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;margin-top:3px;}
+.doodle-row:nth-child(even) .doodle-cell-inner.avail{background:rgba(200,132,26,.13);}
+.doodle-row:nth-child(even) .doodle-cell-inner.unavail{background:rgba(16,10,6,.2);}
+
 /* DATE EDIT LIST */
 .date-edit-row{display:flex;gap:8px;margin-bottom:6px;align-items:center;}
 .date-edit-row input{background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.22);
@@ -458,46 +487,50 @@ body.admin-mode .admin-toggle{display:inline-flex;}
 <div id="page-schedule" class="page">
   <div class="pg-head">
     <h2>Schedule a Meeting</h2>
-    <p>Vote for the dates that work for you — like Doodle, but with more character.</p>
+    <p>Select the dates you're available — the best date rises to the top.</p>
   </div>
   <div class="wrap">
     <div class="card">
       <div class="card-title">
-        Cast Your Availability
+        Availability Poll
         <button class="edit-btn" id="dates-edit-btn" onclick="togglePanel('dates-edit','dates-edit-btn')">✏ Edit Dates</button>
       </div>
-      <p style="font-size:15px;color:var(--text-dim);font-style:italic;margin-bottom:20px;">Select all dates you can make it. Results update live so the best date rises to the top.</p>
-      <div class="date-grid" id="sched-grid"></div>
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:4px;">
-        <input type="text" id="rsvp-name" placeholder="Your name…" style="background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.22);color:var(--text);font-family:'Crimson Pro',serif;font-size:15px;padding:9px 13px;border-radius:4px;width:180px;outline:none;transition:border-color .2s;">
+
+      <!-- Doodle-style grid -->
+      <div id="doodle-wrap" style="overflow-x:auto;margin-bottom:20px;">
+        <div id="doodle-grid"></div>
+      </div>
+
+      <!-- Name entry + submit -->
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <input type="text" id="rsvp-name" placeholder="Your name…"
+          style="background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.22);color:var(--text);
+          font-family:'Crimson Pro',serif;font-size:15px;padding:9px 13px;border-radius:4px;
+          width:180px;outline:none;transition:border-color .2s;">
         <button class="btn btn-primary" onclick="submitRsvp()">Confirm Availability</button>
       </div>
       <div id="rsvp-notif" class="notif"></div>
 
-      <!-- DATES EDIT PANEL — inline in same card -->
+      <!-- Admin date editor -->
       <div class="edit-panel" id="dates-edit">
-        <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;letter-spacing:.04em;">EDIT AVAILABLE DATES</div>
+        <div style="font-size:13px;color:var(--text-dim);margin-bottom:12px;letter-spacing:.04em;">EDIT POLL DATES</div>
         <div class="fld" style="margin-bottom:10px;">
-          <label>Month label</label>
-          <input type="text" id="dates-month-input" placeholder="e.g. June 2025" style="max-width:200px;">
+          <label>Month / label shown above the poll</label>
+          <input type="text" id="dates-month-input" placeholder="e.g. June 2025" style="max-width:220px;">
+        </div>
+        <div class="fld">
+          <label>Pick dates from the calendar</label>
+          <input type="date" id="dates-calendar-picker"
+            style="background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.22);color:var(--text);
+            font-family:'Crimson Pro',serif;font-size:15px;padding:8px 12px;border-radius:4px;
+            outline:none;transition:border-color .2s;color-scheme:dark;">
+          <button class="btn btn-outline btn-sm" onclick="addCalendarDate()" style="margin-top:8px;">+ Add this date</button>
         </div>
         <div id="date-edit-list" style="margin-bottom:12px;"></div>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-outline btn-sm" onclick="addDateEditRow()">+ Add date</button>
           <button class="btn btn-primary btn-sm" onclick="applyDateEdits()">Apply Changes</button>
         </div>
         <div id="dates-notif" class="notif"></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-title">Confirmed Attendees</div>
-      <div id="attendees" style="display:flex;gap:8px;flex-wrap:wrap;">
-        <span class="badge b-smoke">Marcus T.</span>
-        <span class="badge b-smoke">Elena R.</span>
-        <span class="badge b-smoke">James W.</span>
-        <span class="badge b-smoke">Claire B.</span>
-        <span class="badge b-amber">+ You?</span>
       </div>
     </div>
   </div>
@@ -625,14 +658,9 @@ const HISTORY=[
 ];
 
 // Local schedule state — synced from Firebase
-let SCHED_DATES=[
-  {day:'Mon',num:'5'},{day:'Wed',num:'7'},{day:'Sat',num:'10'},
-  {day:'Sun',num:'11'},{day:'Mon',num:'12'},{day:'Wed',num:'14'},
-  {day:'Thu',num:'15'},{day:'Fri',num:'16'},{day:'Sat',num:'17'},{day:'Sun',num:'18'}
-];
-let schedVotes=[0,0,0,0,0,0,0,0,0,0];
-let schedMonth='May 2025';
-let selectedDates=new Set();
+let SCHED_DATES=[];
+let schedMonth='';
+
 
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
 function showPage(id){
@@ -882,130 +910,234 @@ function renderHistory(){
 }
 
 // ─── SCHEDULE — Firebase-backed ──────────────────────────────────────────────
-function renderScheduler(){
-  const max=Math.max(...schedVotes,1);
-  document.getElementById('sched-grid').innerHTML=SCHED_DATES.map((d,i)=>`
-    <div class="date-cell${selectedDates.has(i)?' sel':''}" onclick="toggleDate(${i})">
-      <div class="dc-day">${d.day}</div>
-      <div class="dc-num">${d.num}</div>
-      <div class="dc-votes">${schedVotes[i]} vote${schedVotes[i]!==1?'s':''}</div>
-      <div class="dc-bar"><div class="dc-fill" style="width:${Math.round(schedVotes[i]/max*100)}%"></div></div>
-    </div>`).join('');
+// schedResponses: { name: [true/false per date index] } — who said yes to what
+let schedResponses = {};   // loaded from Firebase
+let pendingSchedSel = [];  // current visitor's pending selections (array of booleans)
+
+function initPendingSel(){
+  pendingSchedSel = SCHED_DATES.map(()=>false);
 }
+
+function renderDoodle(){
+  const wrap = document.getElementById('doodle-grid');
+  if(!wrap) return;
+  if(!SCHED_DATES.length){
+    wrap.innerHTML='<p style="font-size:15px;color:var(--text-dim);font-style:italic;">No dates set yet. Use ✏ Edit Dates to add some.</p>';
+    return;
+  }
+
+  // Ensure pendingSchedSel length matches dates
+  while(pendingSchedSel.length < SCHED_DATES.length) pendingSchedSel.push(false);
+  pendingSchedSel = pendingSchedSel.slice(0, SCHED_DATES.length);
+
+  // Compute per-date vote totals
+  const names = Object.keys(schedResponses);
+  const totals = SCHED_DATES.map((_,i) =>
+    names.filter(n => schedResponses[n] && schedResponses[n][i]).length
+  );
+  const maxVotes = Math.max(...totals, 0);
+
+  // Parse each date for display (dates stored as ISO strings "YYYY-MM-DD")
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+  function parseDate(d){
+    // d is {day, num} legacy OR an ISO string "YYYY-MM-DD"
+    if(typeof d === 'object' && d.num){
+      return {month:'', day:d.day||'', num:d.num};
+    }
+    const dt = new Date(d + 'T12:00:00');
+    return {month: MONTHS[dt.getMonth()], day: DAYS[dt.getDay()], num: dt.getDate()};
+  }
+
+  let html = '<table class="doodle-table">';
+
+  // ── Header row: empty name cell + date columns ─────────────────────────────
+  html += '<thead><tr><th class="doodle-name-col" style="min-width:90px;"></th>';
+  SCHED_DATES.forEach((d,i)=>{
+    const p = parseDate(d);
+    const isBest = maxVotes > 0 && totals[i] === maxVotes;
+    html += `<th class="doodle-date-header${isBest?' best-date':''}">
+      <div class="ddh-month">${p.month}</div>
+      <div class="ddh-day">${p.day}</div>
+      <div class="ddh-num">${p.num}</div>
+    </th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  // ── Existing response rows ─────────────────────────────────────────────────
+  names.forEach((name,ri)=>{
+    const resp = schedResponses[name] || [];
+    html += `<tr class="doodle-row">
+      <td class="doodle-name-col">${name}</td>`;
+    SCHED_DATES.forEach((_,i)=>{
+      const yes = !!resp[i];
+      html += `<td class="doodle-cell">
+        <div class="doodle-cell-inner ${yes?'avail':'unavail'}">${yes?'✓':'✗'}</div>
+      </td>`;
+    });
+    html += '</tr>';
+  });
+
+  // ── Separator ──────────────────────────────────────────────────────────────
+  if(names.length){
+    html += `<tr class="doodle-sep"><td colspan="${SCHED_DATES.length+1}"></td></tr>`;
+  }
+
+  // ── Pending / new response row ─────────────────────────────────────────────
+  html += `<tr class="doodle-row">
+    <td class="doodle-name-col pending">Your pick</td>`;
+  SCHED_DATES.forEach((_,i)=>{
+    const sel = !!pendingSchedSel[i];
+    html += `<td class="doodle-cell">
+      <div class="doodle-cell-inner ${sel?'pending-sel':'pending-unsel'}"
+        onclick="toggleSchedDate(${i})">${sel?'✓':'✗'}</div>
+    </td>`;
+  });
+  html += '</tr>';
+
+  // ── Vote count summary row ─────────────────────────────────────────────────
+  html += `<tr class="doodle-count-row">
+    <td class="doodle-name-col" style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em;">Votes</td>`;
+  SCHED_DATES.forEach((_,i)=>{
+    const isBest = maxVotes > 0 && totals[i] === maxVotes;
+    html += `<td>
+      <div class="doodle-count-box${isBest?' best':''}">${totals[i]}</div>
+    </td>`;
+  });
+  html += '</tr>';
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+}
+
+function toggleSchedDate(i){
+  pendingSchedSel[i] = !pendingSchedSel[i];
+  renderDoodle();
+}
+window.toggleSchedDate = toggleSchedDate;
 
 function updateNextMeetingDisplay(){
-  const max=Math.max(...schedVotes,1);
-  const idx=schedVotes.indexOf(max);
-  const d=SCHED_DATES[idx];
-  const parts=schedMonth.split(' ');
-  document.getElementById('next-month').textContent=parts[0]||'TBD';
-  document.getElementById('next-date').textContent=d?d.num:'—';
+  const names = Object.keys(schedResponses);
+  const totals = SCHED_DATES.map((_,i) =>
+    names.filter(n => schedResponses[n] && schedResponses[n][i]).length
+  );
+  const max = Math.max(...totals, 0);
+  const idx = totals.indexOf(max);
+  const d = SCHED_DATES[idx];
+  if(!d){ document.getElementById('next-month').textContent='TBD'; return; }
+  const parts = schedMonth.split(' ');
+  document.getElementById('next-month').textContent = parts[0]||'TBD';
+  if(typeof d === 'object' && d.num){
+    document.getElementById('next-date').textContent = d.num;
+  } else {
+    const dt = new Date(d+'T12:00:00');
+    document.getElementById('next-date').textContent = dt.getDate();
+  }
 }
-
-function toggleDate(i){
-  selectedDates.has(i)?selectedDates.delete(i):selectedDates.add(i);
-  renderScheduler();
-}
-window.toggleDate=toggleDate;
 
 async function submitRsvp(){
-  const name=document.getElementById('rsvp-name').value.trim();
+  const name = document.getElementById('rsvp-name').value.trim();
   if(!name){showNotif('rsvp-notif','Please enter your name.',true);return;}
-  if(!selectedDates.size){showNotif('rsvp-notif','Please select at least one date.',true);return;}
+  if(!pendingSchedSel.some(Boolean)){showNotif('rsvp-notif','Please select at least one date.',true);return;}
 
-  // Write each selected date vote to Firebase
-  const updates=[];
-  selectedDates.forEach(i=>{
-    schedVotes[i]++;
-    updates.push(dbSet(`schedule/votes/${i}`, schedVotes[i]));
-  });
-  // Append attendee name
-  updates.push(dbPush('schedule/attendees', name));
-  await Promise.all(updates);
+  // Store response as array of booleans keyed by safe name
+  const safeN = name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,40);
+  await dbSet(`schedule/responses/${safeN}`, {name, avail: pendingSchedSel});
 
-  selectedDates.clear();
-  renderScheduler();
+  schedResponses[name] = [...pendingSchedSel];
+  initPendingSel();
+  renderDoodle();
   updateNextMeetingDisplay();
   document.getElementById('rsvp-name').value='';
   showNotif('rsvp-notif',`Thanks, ${name}! Your availability has been recorded.`);
 }
-window.submitRsvp=submitRsvp;
+window.submitRsvp = submitRsvp;
 
-// Date editor
+// Date editor — now uses a calendar picker
 function buildDateEditList(){
-  document.getElementById('date-edit-list').innerHTML=SCHED_DATES.map((d,i)=>`
-    <div class="date-edit-row" id="der-${i}">
-      <input class="inp-day" type="text" value="${d.day}" placeholder="Mon">
-      <input class="inp-num" type="text" value="${d.num}" placeholder="5">
+  const list = document.getElementById('date-edit-list');
+  list.innerHTML = SCHED_DATES.map((d,i)=>{
+    const label = typeof d === 'object' ? `${d.day} ${d.num}` : d;
+    return `<div class="date-edit-row" id="der-${i}">
+      <span style="font-size:14px;color:var(--cream);flex:1;">${label}</span>
       <button class="remove-date" onclick="document.getElementById('der-${i}').remove()">✕</button>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 }
-function addDateEditRow(){
-  const idx=Date.now();
-  const row=document.createElement('div');
-  row.className='date-edit-row';row.id='der-'+idx;
-  row.innerHTML=`<input class="inp-day" type="text" placeholder="Mon">
-    <input class="inp-num" type="text" placeholder="5">
+
+function addCalendarDate(){
+  const picker = document.getElementById('dates-calendar-picker');
+  const val = picker.value; // "YYYY-MM-DD"
+  if(!val){showNotif('dates-notif','Please pick a date first.',true);return;}
+  const list = document.getElementById('date-edit-list');
+  // Check for duplicates
+  const existing = Array.from(list.querySelectorAll('.date-edit-row span')).map(s=>s.textContent.trim());
+  if(existing.includes(val)){showNotif('dates-notif','That date is already in the list.',true);return;}
+  const dt = new Date(val+'T12:00:00');
+  const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const label = `${DAYS[dt.getDay()]} ${dt.getDate()} ${MONTHS[dt.getMonth()]}`;
+  const idx = Date.now();
+  const row = document.createElement('div');
+  row.className='date-edit-row'; row.id='der-'+idx;
+  row.dataset.isoDate = val;
+  row.innerHTML=`<span style="font-size:14px;color:var(--cream);flex:1;">${label}</span>
     <button class="remove-date" onclick="this.parentElement.remove()">✕</button>`;
-  document.getElementById('date-edit-list').appendChild(row);
+  list.appendChild(row);
+  picker.value='';
+  showNotif('dates-notif',`${label} added.`);
 }
+window.addCalendarDate = addCalendarDate;
+
 async function applyDateEdits(){
   if(!adminUnlocked){showNotif('dates-notif','Admin access required.',true);return;}
-  const month=document.getElementById('dates-month-input').value.trim();
-  const rows=document.querySelectorAll('#date-edit-list .date-edit-row');
-  const newDates=[];
+  const month = document.getElementById('dates-month-input').value.trim();
+  const rows = document.querySelectorAll('#date-edit-list .date-edit-row');
+  const newDates = [];
   rows.forEach(row=>{
-    const day=row.querySelector('.inp-day').value.trim();
-    const num=row.querySelector('.inp-num').value.trim();
-    if(day&&num)newDates.push({day,num});
+    // New rows have data-iso-date; legacy rows just have text
+    if(row.dataset.isoDate) newDates.push(row.dataset.isoDate);
+    else {
+      const txt = row.querySelector('span')&&row.querySelector('span').textContent.trim();
+      if(txt) newDates.push(txt);
+    }
   });
   if(!newDates.length){showNotif('dates-notif','Please add at least one date.',true);return;}
-
-  const newVotes=newDates.map(()=>0);
-  // Save to Firebase
   await Promise.all([
     dbSet('schedule/dates', newDates),
-    dbSet('schedule/votes', newVotes),
     dbSet('schedule/month', month||schedMonth),
+    dbDel('schedule/responses'),
+    dbDel('schedule/votes'), // clear legacy votes too
     dbDel('schedule/attendees'),
   ]);
-  showNotif('dates-notif','Dates updated successfully.');
+  showNotif('dates-notif','Poll updated. All previous responses cleared.');
 }
-window.buildDateEditList=buildDateEditList;
-window.addDateEditRow=addDateEditRow;
-window.applyDateEdits=applyDateEdits;
+window.buildDateEditList = buildDateEditList;
+window.applyDateEdits = applyDateEdits;
 
 // Live-sync schedule from Firebase
 function initScheduleSync(){
   dbLive('schedule', data => {
     if(!data) return;
     if(data.dates){
-      const dates=normaliseArray(data.dates);
+      const dates = normaliseArray(data.dates);
       SCHED_DATES.length=0;
       dates.forEach(d=>SCHED_DATES.push(d));
+      initPendingSel();
     }
-    if(data.votes){
-      const votes=normaliseArray(data.votes);
-      schedVotes.length=0;
-      votes.forEach(v=>schedVotes.push(v||0));
-      while(schedVotes.length<SCHED_DATES.length)schedVotes.push(0);
-    }
-    if(data.month) schedMonth=data.month;
+    if(data.month) schedMonth = data.month;
 
-    // Render attendees
-    const attendeesEl=document.getElementById('attendees');
-    attendeesEl.innerHTML='';
-    if(data.attendees){
-      Object.values(data.attendees).forEach(name=>{
-        const b=document.createElement('span');
-        b.className='badge b-smoke';b.textContent=name;
-        attendeesEl.appendChild(b);
+    // Load responses (new format)
+    schedResponses = {};
+    if(data.responses){
+      Object.values(data.responses).forEach(r=>{
+        if(r&&r.name) schedResponses[r.name] = normaliseArray(r.avail||[]);
       });
     }
-    if(!attendeesEl.children.length){
-      attendeesEl.innerHTML='<span class="badge b-amber">Be the first to RSVP</span>';
-    }
-    renderScheduler();
+    // Legacy votes/attendees fallback — ignore, new format takes over
+
+    renderDoodle();
     updateNextMeetingDisplay();
   });
 }
