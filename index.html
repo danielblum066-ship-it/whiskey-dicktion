@@ -678,14 +678,11 @@ let adminUnlocked = false;
 
 function toggleAdminMode(){
   if(adminUnlocked){
-    // Lock: hide all edit panels, remove admin mode
     adminUnlocked = false;
     document.body.classList.remove('admin-mode');
-    document.querySelectorAll('.edit-panel.open').forEach(p=>{
-      p.classList.remove('open');
-    });
-    // Reset any active edit buttons
+    document.querySelectorAll('.edit-panel.open').forEach(p=>p.classList.remove('open'));
     document.querySelectorAll('.edit-btn.active').forEach(b=>b.classList.remove('active'));
+    applyNoteAdminVisibility();
     updateLockBtn();
     return;
   }
@@ -719,6 +716,7 @@ function toggleAdminMode(){
     if(inp.value === ADMIN_PW){
       adminUnlocked = true;
       document.body.classList.add('admin-mode');
+      applyNoteAdminVisibility();
       updateLockBtn();
       modal.remove();
     } else {
@@ -1041,16 +1039,21 @@ async function submitRsvp(){
   if(!name){showNotif('rsvp-notif','Please enter your name.',true);return;}
   if(!pendingSchedSel.some(Boolean)){showNotif('rsvp-notif','Please select at least one date.',true);return;}
 
-  // Store response as array of booleans keyed by safe name
   const safeN = name.toLowerCase().replace(/[^a-z0-9]/g,'_').slice(0,40);
-  await dbSet(`schedule/responses/${safeN}`, {name, avail: pendingSchedSel});
 
+  // Optimistically add to local cache so grid updates instantly
+  // without waiting for Firebase round-trip
   schedResponses[name] = [...pendingSchedSel];
+
+  // Reset pending row immediately so it feels responsive
   initPendingSel();
   renderDoodle();
   updateNextMeetingDisplay();
   document.getElementById('rsvp-name').value='';
   showNotif('rsvp-notif',`Thanks, ${name}! Your availability has been recorded.`);
+
+  // Write to Firebase in background — live listener will confirm
+  await dbSet(`schedule/responses/${safeN}`, {name, avail: schedResponses[name]});
 }
 window.submitRsvp = submitRsvp;
 
@@ -1117,14 +1120,18 @@ window.buildDateEditList = buildDateEditList;
 window.applyDateEdits = applyDateEdits;
 
 // Live-sync schedule from Firebase
+let schedInitialised=false;
 function initScheduleSync(){
   dbLive('schedule', data => {
     if(!data) return;
     if(data.dates){
       const dates = normaliseArray(data.dates);
+      const lengthChanged = dates.length !== SCHED_DATES.length;
       SCHED_DATES.length=0;
       dates.forEach(d=>SCHED_DATES.push(d));
-      initPendingSel();
+      // Only reset pending selections on first load or if date list changed
+      if(!schedInitialised || lengthChanged) initPendingSel();
+      schedInitialised=true;
     }
     if(data.month) schedMonth = data.month;
 
@@ -1135,7 +1142,6 @@ function initScheduleSync(){
         if(r&&r.name) schedResponses[r.name] = normaliseArray(r.avail||[]);
       });
     }
-    // Legacy votes/attendees fallback — ignore, new format takes over
 
     renderDoodle();
     updateNextMeetingDisplay();
@@ -1143,26 +1149,110 @@ function initScheduleSync(){
 }
 
 // ─── NOTES — Firebase-backed ─────────────────────────────────────────────────
-let notesCache=[];
+let notesCache={};  // key -> note object, kept in sync with Firebase
 
 function renderNotes(data){
+  notesCache = data||{};
   const list=document.getElementById('notes-list');
   if(!data||!Object.keys(data).length){
     list.innerHTML='<p style="font-size:15px;color:var(--text-dim);font-style:italic;">No notes yet. Add your first entry below.</p>';
     return;
   }
-  // Sort newest first by timestamp
   const entries=Object.entries(data).sort((a,b)=>(b[1].ts||0)-(a[1].ts||0));
-  list.innerHTML=entries.map(([,n])=>`
-    <div class="note-item">
+  list.innerHTML=entries.map(([key,n])=>`
+    <div class="note-item" id="note-item-${key}">
       <div class="note-meta">
         <span class="note-book-name">${n.book}</span>
         <span class="badge b-smoke">${n.date}</span>
         ${n.whiskey?`<span class="badge b-amber">🥃 ${n.whiskey}</span>`:''}
+        <span class="note-admin-btns" style="margin-left:auto;display:none;gap:6px;">
+          <button class="btn btn-outline btn-sm" style="padding:2px 10px;font-size:12px;"
+            onclick="openNoteEdit('${key}')">✏ Edit</button>
+          <button class="btn btn-danger btn-sm" style="padding:2px 10px;font-size:12px;"
+            onclick="deleteNote('${key}')">✕ Delete</button>
+        </span>
       </div>
-      <div class="note-body">${n.body||''}</div>
+      <div class="note-body" id="note-body-${key}">${n.body||''}</div>
+      <!-- Inline edit form — hidden by default -->
+      <div class="note-edit-form" id="note-edit-${key}" style="display:none;margin-top:14px;">
+        <div class="g2" style="margin-bottom:10px;">
+          <div class="fld" style="margin-bottom:0;">
+            <label>Book</label>
+            <input type="text" id="nef-book-${key}" value="${escHtml(n.book)}">
+          </div>
+          <div class="fld" style="margin-bottom:0;">
+            <label>Date</label>
+            <input type="text" id="nef-date-${key}" value="${escHtml(n.date)}">
+          </div>
+        </div>
+        <div class="fld" style="margin-bottom:10px;">
+          <label>Whiskey</label>
+          <input type="text" id="nef-whiskey-${key}" value="${escHtml(n.whiskey||'')}">
+        </div>
+        <div class="fld" style="margin-bottom:10px;">
+          <label>Notes</label>
+          <textarea id="nef-body-${key}" rows="4"
+            style="background:rgba(16,10,6,.6);border:1px solid rgba(200,132,26,.22);color:var(--text);
+            font-family:'Crimson Pro',serif;font-size:15px;padding:9px 13px;border-radius:4px;
+            width:100%;outline:none;resize:vertical;transition:border-color .2s;">${escHtml(n.body||'')}</textarea>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="saveNoteEdit('${key}')">Save</button>
+          <button class="btn btn-outline btn-sm" onclick="closeNoteEdit('${key}')">Cancel</button>
+        </div>
+        <div id="nef-notif-${key}" class="notif"></div>
+      </div>
     </div>`).join('');
+
+  // Show/hide admin buttons based on current mode
+  applyNoteAdminVisibility();
 }
+
+function escHtml(str){
+  return String(str||'')
+    .replace(/&/g,'&amp;').replace(/"/g,'&quot;')
+    .replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function applyNoteAdminVisibility(){
+  document.querySelectorAll('.note-admin-btns').forEach(el=>{
+    el.style.display = adminUnlocked ? 'flex' : 'none';
+  });
+}
+
+function openNoteEdit(key){
+  if(!adminUnlocked) return;
+  document.getElementById(`note-edit-${key}`).style.display='block';
+  document.getElementById(`note-body-${key}`).style.display='none';
+}
+window.openNoteEdit=openNoteEdit;
+
+function closeNoteEdit(key){
+  document.getElementById(`note-edit-${key}`).style.display='none';
+  document.getElementById(`note-body-${key}`).style.display='';
+}
+window.closeNoteEdit=closeNoteEdit;
+
+async function saveNoteEdit(key){
+  if(!adminUnlocked) return;
+  const book=document.getElementById(`nef-book-${key}`).value.trim();
+  const date=document.getElementById(`nef-date-${key}`).value.trim();
+  const whiskey=document.getElementById(`nef-whiskey-${key}`).value.trim();
+  const body=document.getElementById(`nef-body-${key}`).value.trim();
+  if(!book||!body){showNotif(`nef-notif-${key}`,'Book and notes are required.',true);return;}
+  const existing=notesCache[key]||{};
+  await dbSet(`notes/${key}`,{...existing, book, date:date||'Recent', whiskey, body});
+  showNotif(`nef-notif-${key}`,'Saved.');
+  // Firebase live listener will re-render automatically
+}
+window.saveNoteEdit=saveNoteEdit;
+
+async function deleteNote(key){
+  if(!adminUnlocked) return;
+  if(!confirm('Delete this note? This cannot be undone.')) return;
+  await dbDel(`notes/${key}`);
+}
+window.deleteNote=deleteNote;
 
 async function addNote(){
   if(!adminUnlocked){showNotif('note-notif','Admin access required.',true);return;}
